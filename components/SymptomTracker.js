@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 
 const SymptomTracker = () => {
@@ -171,7 +171,7 @@ const SymptomTracker = () => {
     setSaving(false);
   }, [currentRecord, records, userName]);
 
-  // useCallback으로 메모이제이션하여 불필요한 재렌더링 방지
+  // 핵심: handleInputChange를 완전히 안정화
   const handleInputChange = useCallback((field, value) => {
     setCurrentRecord(prev => ({
       ...prev,
@@ -279,8 +279,8 @@ const SymptomTracker = () => {
     );
   }
 
-  // 간단 모드 폼
-  const SimpleForm = () => (
+  // 간단 모드 폼 - 컴포넌트를 외부로 분리하지 않고 직접 렌더링
+  const simpleFormContent = useMemo(() => (
     <div style={{ maxWidth: '400px', margin: '0 auto', padding: '24px', backgroundColor: 'white', minHeight: '100vh' }}>
       <div style={{ marginBottom: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -346,6 +346,7 @@ const SymptomTracker = () => {
           <div>
             <label style={{ display: 'block', fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>날짜</label>
             <input
+              key="date-input"
               type="date"
               value={currentRecord.date}
               onChange={(e) => handleInputChange('date', e.target.value)}
@@ -361,6 +362,7 @@ const SymptomTracker = () => {
           <div>
             <label style={{ display: 'block', fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>시간</label>
             <input
+              key="time-input"
               type="time"
               value={currentRecord.time}
               onChange={(e) => handleInputChange('time', e.target.value)}
@@ -378,6 +380,7 @@ const SymptomTracker = () => {
         <div>
           <label style={{ display: 'block', fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>당시 하고 있던 일</label>
           <select
+            key="activity-select"
             value={currentRecord.activity}
             onChange={(e) => handleInputChange('activity', e.target.value)}
             style={{ 
@@ -395,7 +398,6 @@ const SymptomTracker = () => {
             <option value="식사 중">식사 중</option>
             <option value="휴식 중">휴식 중</option>
             <option value="운동 중">운동 중</option>
-            <option value="노동 중">노동 중</option>
             <option value="기타">기타</option>
           </select>
         </div>
@@ -403,6 +405,7 @@ const SymptomTracker = () => {
         <div>
           <label style={{ display: 'block', fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>두근거림 정도</label>
           <select
+            key="heart-rate-select"
             value={currentRecord.heart_rate}
             onChange={(e) => handleInputChange('heart_rate', e.target.value)}
             style={{ 
@@ -425,6 +428,7 @@ const SymptomTracker = () => {
         <div>
           <label style={{ display: 'block', fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>지속 시간</label>
           <select
+            key="duration-select"
             value={currentRecord.duration}
             onChange={(e) => handleInputChange('duration', e.target.value)}
             style={{ 
@@ -447,6 +451,7 @@ const SymptomTracker = () => {
         <div>
           <label style={{ display: 'block', fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>혈압 (선택사항)</label>
           <input
+            key="blood-pressure-input"
             type="text"
             value={currentRecord.blood_pressure}
             onChange={(e) => handleInputChange('blood_pressure', e.target.value)}
@@ -464,6 +469,7 @@ const SymptomTracker = () => {
         <div>
           <label style={{ display: 'block', fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>특이사항 (선택사항)</label>
           <textarea
+            key="notes-textarea"
             value={currentRecord.notes}
             onChange={(e) => handleInputChange('notes', e.target.value)}
             placeholder="특별히 기억할 만한 내용이 있다면..."
@@ -500,10 +506,10 @@ const SymptomTracker = () => {
         </button>
       </div>
     </div>
-  );
+  ), [currentRecord, userName, saving, handleInputChange, handleSubmit]);
 
-  // 상세 모드 폼 - 여기서는 주요 입력 필드들만 수정해서 보여드립니다
-  const DetailedForm = () => (
+  // 상세 모드 폼
+  const detailedFormContent = useMemo(() => (
     <div style={{ maxWidth: '800px', margin: '0 auto', padding: '24px', backgroundColor: 'white', minHeight: '100vh' }}>
       <div style={{ marginBottom: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -572,6 +578,7 @@ const SymptomTracker = () => {
             <div>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>날짜</label>
               <input
+                key="detail-date-input"
                 type="date"
                 value={currentRecord.date}
                 onChange={(e) => handleInputChange('date', e.target.value)}
@@ -581,6 +588,7 @@ const SymptomTracker = () => {
             <div>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>시간</label>
               <input
+                key="detail-time-input"
                 type="time"
                 value={currentRecord.time}
                 onChange={(e) => handleInputChange('time', e.target.value)}
@@ -590,6 +598,7 @@ const SymptomTracker = () => {
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>당시 하고 있던 일</label>
               <input
+                key="detail-activity-input"
                 type="text"
                 value={currentRecord.activity}
                 onChange={(e) => handleInputChange('activity', e.target.value)}
@@ -600,6 +609,7 @@ const SymptomTracker = () => {
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>많이 사용한 신체 부위</label>
               <input
+                key="detail-body-part-input"
                 type="text"
                 value={currentRecord.body_part}
                 onChange={(e) => handleInputChange('body_part', e.target.value)}
@@ -610,6 +620,7 @@ const SymptomTracker = () => {
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>1시간 내 섭취한 음식·음료</label>
               <input
+                key="detail-intake-input"
                 type="text"
                 value={currentRecord.intake}
                 onChange={(e) => handleInputChange('intake', e.target.value)}
@@ -620,15 +631,14 @@ const SymptomTracker = () => {
           </div>
         </div>
 
-        {/* 나머지 섹션들도 동일한 패턴으로 처리... */}
-        {/* 여기서는 간단히 몇 개만 보여드리겠습니다 */}
-
+        {/* ② 증상 시작 */}
         <div style={{ backgroundColor: '#FEF3C7', padding: '16px', borderRadius: '8px' }}>
           <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px', color: '#92400E' }}>② 증상 시작</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>증상 시작 순간의 느낌</label>
               <input
+                key="detail-start-feeling-input"
                 type="text"
                 value={currentRecord.start_feeling}
                 onChange={(e) => handleInputChange('start_feeling', e.target.value)}
@@ -639,6 +649,7 @@ const SymptomTracker = () => {
             <div>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>시작 양상</label>
               <select
+                key="detail-start-type-select"
                 value={currentRecord.start_type}
                 onChange={(e) => handleInputChange('start_type', e.target.value)}
                 style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
@@ -651,6 +662,7 @@ const SymptomTracker = () => {
             <div>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>전조 증상</label>
               <input
+                key="detail-premonition-input"
                 type="text"
                 value={currentRecord.premonition}
                 onChange={(e) => handleInputChange('premonition', e.target.value)}
@@ -668,6 +680,7 @@ const SymptomTracker = () => {
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>추가 메모</label>
               <textarea
+                key="detail-notes-textarea"
                 value={currentRecord.notes}
                 onChange={(e) => handleInputChange('notes', e.target.value)}
                 placeholder="기타 특이사항이나 중요하다고 생각되는 내용"
@@ -705,10 +718,10 @@ const SymptomTracker = () => {
         </button>
       </div>
     </div>
-  );
+  ), [currentRecord, userName, saving, handleInputChange, handleSubmit]);
 
   if (showForm) {
-    return detailMode ? <DetailedForm /> : <SimpleForm />;
+    return detailMode ? detailedFormContent : simpleFormContent;
   }
 
   if (loading) {
