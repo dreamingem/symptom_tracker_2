@@ -463,6 +463,7 @@ const SymptomTracker = () => {
                 fontSize: '14px',
                 fontWeight: '500',
                 marginBottom: '6px'
+                color: '#111827'
               }}>
                 날짜
               </label>
@@ -479,6 +480,7 @@ const SymptomTracker = () => {
                 fontSize: '14px',
                 fontWeight: '500',
                 marginBottom: '6px'
+                color: '#111827'
               }}>
                 시간
               </label>
@@ -497,6 +499,7 @@ const SymptomTracker = () => {
               fontSize: '14px',
               fontWeight: '500',
               marginBottom: '6px'
+              color: '#111827'
             }}>
               당시 하고 있던 일
             </label>
@@ -526,6 +529,7 @@ const SymptomTracker = () => {
               fontSize: '14px',
               fontWeight: '500',
               marginBottom: '6px'
+              color: '#111827'
             }}>
               두근거림 정도 (1-10)
             </label>
@@ -553,6 +557,7 @@ const SymptomTracker = () => {
               fontSize: '14px',
               fontWeight: '500',
               marginBottom: '6px'
+              color: '#111827'
             }}>
               지속 시간
             </label>
@@ -580,6 +585,7 @@ const SymptomTracker = () => {
               fontSize: '14px',
               fontWeight: '500',
               marginBottom: '6px'
+              color: '#111827'
             }}>
               혈압 (선택사항)
             </label>
@@ -598,6 +604,7 @@ const SymptomTracker = () => {
               fontSize: '14px',
               fontWeight: '500',
               marginBottom: '6px'
+              color: '#111827'
             }}>
               특이사항 (선택사항)
             </label>
