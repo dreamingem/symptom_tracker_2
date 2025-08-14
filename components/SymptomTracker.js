@@ -304,9 +304,6 @@ const SymptomTracker = () => {
         </div>
       </div>
     );
-};
-
-export default SymptomTracker;
   };
 
   // 연결 상태
@@ -453,7 +450,6 @@ export default SymptomTracker;
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* 날짜/시간 */}
           <div style={{
             display: 'grid',
             gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
@@ -493,7 +489,6 @@ export default SymptomTracker;
             </div>
           </div>
 
-          {/* 활동 */}
           <div>
             <label style={{
               display: 'block',
@@ -519,7 +514,6 @@ export default SymptomTracker;
             </select>
           </div>
 
-          {/* 두근거림 */}
           <div>
             <label style={{
               display: 'block',
@@ -543,7 +537,6 @@ export default SymptomTracker;
             </select>
           </div>
 
-          {/* 지속시간 */}
           <div>
             <label style={{
               display: 'block',
@@ -567,7 +560,6 @@ export default SymptomTracker;
             </select>
           </div>
 
-          {/* 혈압 */}
           <div>
             <label style={{
               display: 'block',
@@ -586,7 +578,6 @@ export default SymptomTracker;
             />
           </div>
 
-          {/* 메모 */}
           <div>
             <label style={{
               display: 'block',
@@ -669,7 +660,6 @@ export default SymptomTracker;
     }}>
       <ErrorDisplay />
       
-      {/* 헤더 */}
       <div style={{ marginBottom: '20px' }}>
         <div style={{
           display: 'flex',
@@ -727,7 +717,6 @@ export default SymptomTracker;
         </div>
       </div>
 
-      {/* 기록 버튼 */}
       <div style={{ marginBottom: '20px' }}>
         <button
           onClick={() => setShowForm(true)}
@@ -752,7 +741,6 @@ export default SymptomTracker;
         </button>
       </div>
 
-      {/* 연결 상태 안내 */}
       {connectionStatus !== 'connected' && (
         <div style={{
           background: '#FEF3C7',
@@ -784,7 +772,6 @@ export default SymptomTracker;
         </div>
       )}
 
-      {/* PWA 안내 */}
       <div style={{
         background: '#EBF8FF',
         padding: '12px',
@@ -814,7 +801,6 @@ export default SymptomTracker;
         </div>
       </div>
 
-      {/* 기록 목록 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {records.length === 0 ? (
           <div style={{
@@ -929,4 +915,4 @@ export default SymptomTracker;
   );
 };
 
-export default SymptomTracker; 
+export default SymptomTracker;
