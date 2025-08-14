@@ -15,7 +15,7 @@ const SymptomTracker = () => {
     start_feeling: '',
     start_type: '',
     premonition: '',
-    heart_rate: null,  // 빈 문자열 대신 null 사용
+    heart_rate: null,
     sweating: '',
     breathing: null,
     dizziness: null,
@@ -45,68 +45,124 @@ const SymptomTracker = () => {
   const [error, setError] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState('testing');
 
-  // 데이터 정제 함수 - 빈 문자열을 null로 변환
-  const sanitizeRecord = (record) => {
-    const sanitized = { ...record };
-    
-    // 정수 필드들 - 빈 문자열이면 null로 변환
-    const integerFields = [
-      'heart_rate', 
-      'breathing', 
-      'dizziness', 
-      'speech_difficulty', 
-      'measured_heart_rate', 
-      'duration', 
-      'recovery_heart_rate'
-    ];
-    
-    integerFields.forEach(field => {
-      if (sanitized[field] === '' || sanitized[field] === undefined) {
-        sanitized[field] = null;
-      } else if (sanitized[field] !== null) {
-        // 숫자로 변환 시도
-        const num = parseInt(sanitized[field], 10);
-        sanitized[field] = isNaN(num) ? null : num;
-      }
-    });
+  // 모바일 브라우저 감지
+  const isMobile = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  }, []);
 
-    // 불린 필드
-    if (typeof sanitized.ecg_taken !== 'boolean') {
-      sanitized.ecg_taken = sanitized.ecg_taken === 'true' || sanitized.ecg_taken === true;
+  // 안전한 localStorage 접근
+  const safeLocalStorage = useMemo(() => ({
+    getItem: (key) => {
+      try {
+        return localStorage.getItem(key);
+      } catch (e) {
+        console.warn('localStorage.getItem 실패:', e);
+        return null;
+      }
+    },
+    setItem: (key, value) => {
+      try {
+        localStorage.setItem(key, value);
+        return true;
+      } catch (e) {
+        console.warn('localStorage.setItem 실패:', e);
+        return false;
+      }
+    },
+    removeItem: (key) => {
+      try {
+        localStorage.removeItem(key);
+        return true;
+      } catch (e) {
+        console.warn('localStorage.removeItem 실패:', e);
+        return false;
+      }
     }
+  }), []);
 
-    // 문자열 필드들 - null이면 빈 문자열로 변환
-    const stringFields = [
-      'activity', 'body_part', 'intake', 'start_feeling', 'start_type', 
-      'premonition', 'sweating', 'weakness', 'chest_pain', 'blood_pressure', 
-      'blood_sugar', 'after_effects', 'recovery_blood_pressure', 'recovery_actions', 
-      'recovery_helpful', 'sleep_hours', 'stress', 'medications', 'notes'
-    ];
+  // 데이터 정제 함수 - 더 안전한 방식으로 개선
+  const sanitizeRecord = useCallback((record) => {
+    try {
+      const sanitized = JSON.parse(JSON.stringify(record)); // 깊은 복사
+      
+      const integerFields = [
+        'heart_rate', 
+        'breathing', 
+        'dizziness', 
+        'speech_difficulty', 
+        'measured_heart_rate', 
+        'duration', 
+        'recovery_heart_rate'
+      ];
+      
+      integerFields.forEach(field => {
+        if (sanitized[field] === '' || sanitized[field] === undefined || sanitized[field] === null) {
+          sanitized[field] = null;
+        } else {
+          const num = parseInt(sanitized[field], 10);
+          sanitized[field] = isNaN(num) ? null : num;
+        }
+      });
+
+      // 불린 필드 안전 처리
+      sanitized.ecg_taken = Boolean(sanitized.ecg_taken === 'true' || sanitized.ecg_taken === true);
+
+      // 문자열 필드 안전 처리
+      const stringFields = [
+        'activity', 'body_part', 'intake', 'start_feeling', 'start_type', 
+        'premonition', 'sweating', 'weakness', 'chest_pain', 'blood_pressure', 
+        'blood_sugar', 'after_effects', 'recovery_blood_pressure', 'recovery_actions', 
+        'recovery_helpful', 'sleep_hours', 'stress', 'medications', 'notes'
+      ];
+      
+      stringFields.forEach(field => {
+        if (sanitized[field] === null || sanitized[field] === undefined) {
+          sanitized[field] = '';
+        } else {
+          sanitized[field] = String(sanitized[field]); // 문자열로 변환
+        }
+      });
+
+      return sanitized;
+    } catch (e) {
+      console.error('데이터 정제 실패:', e);
+      return record;
+    }
+  }, []);
+
+  // 에러 핸들링 개선
+  const handleError = useCallback((error, context) => {
+    const errorMessage = error && error.message ? error.message : String(error);
+    console.error(`오류 발생 (${context}):`, error);
     
-    stringFields.forEach(field => {
-      if (sanitized[field] === null || sanitized[field] === undefined) {
-        sanitized[field] = '';
-      }
-    });
+    // 모바일에서 더 간단한 에러 메시지
+    if (isMobile) {
+      setError(`${context} 오류가 발생했습니다.`);
+    } else {
+      setError(`${context}: ${errorMessage}`);
+    }
+  }, [isMobile]);
 
-    return sanitized;
-  };
-
-  // Supabase 연결 테스트
+  // Supabase 연결 테스트 - 더 견고하게
   const testSupabaseConnection = useCallback(async () => {
     try {
       console.log('Supabase 연결 테스트 시작...');
       
-      const { data, error } = await supabase
+      // 타임아웃 설정 (모바일에서 긴 응답시간 고려)
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('연결 시간 초과')), 10000);
+      });
+      
+      const connectionPromise = supabase
         .from('symptoms')
         .select('count')
         .limit(1);
 
+      const { data, error } = await Promise.race([connectionPromise, timeoutPromise]);
+
       if (error) {
-        console.error('Supabase 연결 오류:', error);
-        setConnectionStatus('offline');
-        setError(`데이터베이스 연결 실패: ${error.message}`);
-        return false;
+        throw error;
       }
 
       console.log('Supabase 연결 성공');
@@ -114,19 +170,24 @@ const SymptomTracker = () => {
       setError(null);
       return true;
     } catch (err) {
-      console.error('Supabase 연결 예외:', err);
+      console.error('Supabase 연결 실패:', err);
       setConnectionStatus('offline');
-      setError(`연결 오류: ${err.message}`);
+      handleError(err, '데이터베이스 연결');
       return false;
     }
-  }, []);
+  }, [handleError]);
 
-  // 초기 설정
+  // 초기화 - 에러 처리 강화
   useEffect(() => {
     const initialize = async () => {
       try {
+        setLoading(true);
+        
+        // 연결 테스트
         await testSupabaseConnection();
-        const savedUserName = localStorage.getItem('symptom_tracker_user');
+
+        // 사용자 정보 로드
+        const savedUserName = safeLocalStorage.getItem('symptom_tracker_user');
         if (savedUserName) {
           setUserName(savedUserName);
           await loadRecords(savedUserName);
@@ -134,47 +195,46 @@ const SymptomTracker = () => {
           setShowUserSetup(true);
         }
       } catch (error) {
-        console.error('초기화 오류:', error);
-        setError(`초기화 실패: ${error.message}`);
+        handleError(error, '앱 초기화');
         setShowUserSetup(true);
       } finally {
         setLoading(false);
       }
     };
 
-    initialize();
-  }, [testSupabaseConnection]);
+    // 초기화 지연으로 모바일에서 안정성 확보
+    const timer = setTimeout(initialize, 100);
+    return () => clearTimeout(timer);
+  }, [testSupabaseConnection, handleError, safeLocalStorage]);
 
   const handleUserSetup = useCallback(async () => {
     try {
-      if (tempUserName.trim()) {
+      if (tempUserName && tempUserName.trim()) {
         const finalUserName = tempUserName.trim();
         setUserName(finalUserName);
-        localStorage.setItem('symptom_tracker_user', finalUserName);
+        safeLocalStorage.setItem('symptom_tracker_user', finalUserName);
         setShowUserSetup(false);
         await loadRecords(finalUserName);
       }
     } catch (error) {
-      console.error('사용자 설정 오류:', error);
-      setError(`사용자 설정 실패: ${error.message}`);
+      handleError(error, '사용자 설정');
     }
-  }, [tempUserName]);
+  }, [tempUserName, handleError, safeLocalStorage]);
 
   const changeUser = useCallback(() => {
     try {
-      localStorage.removeItem('symptom_tracker_user');
+      safeLocalStorage.removeItem('symptom_tracker_user');
       setUserName('');
       setTempUserName('');
       setRecords([]);
       setShowUserSetup(true);
       setError(null);
     } catch (error) {
-      console.error('사용자 변경 오류:', error);
-      setError(`사용자 변경 실패: ${error.message}`);
+      handleError(error, '사용자 변경');
     }
-  }, []);
+  }, [handleError, safeLocalStorage]);
 
-  const loadRecords = async (user) => {
+  const loadRecords = useCallback(async (user) => {
     setLoading(true);
     setError(null);
 
@@ -188,20 +248,20 @@ const SymptomTracker = () => {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('데이터 로드 오류:', error);
-        throw new Error(`데이터 로드 실패: ${error.message}`);
+        throw error;
       }
 
-      console.log(`${data?.length || 0}개의 기록을 로드했습니다.`);
-      setRecords(data || []);
-      localStorage.setItem(`symptomRecords_${user}`, JSON.stringify(data || []));
+      const records = data || [];
+      console.log(`${records.length}개의 기록을 로드했습니다.`);
+      setRecords(records);
+      safeLocalStorage.setItem(`symptomRecords_${user}`, JSON.stringify(records));
       
     } catch (error) {
-      console.error('데이터 로드 실패:', error);
-      setError(error.message);
+      handleError(error, '데이터 로드');
       
+      // 로컬 백업 복구 시도
       try {
-        const localData = localStorage.getItem(`symptomRecords_${user}`);
+        const localData = safeLocalStorage.getItem(`symptomRecords_${user}`);
         if (localData) {
           const parsedData = JSON.parse(localData);
           setRecords(parsedData);
@@ -213,12 +273,11 @@ const SymptomTracker = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [handleError, safeLocalStorage]);
 
-  const saveToSupabase = async (record) => {
-    console.log('저장 전 원본 데이터:', record);
+  const saveToSupabase = useCallback(async (record) => {
+    console.log('저장 시작:', record);
     
-    // 데이터 정제
     const sanitizedRecord = sanitizeRecord(record);
     
     const recordWithUser = { 
@@ -227,7 +286,7 @@ const SymptomTracker = () => {
       created_at: new Date().toISOString()
     };
 
-    console.log('Supabase에 저장할 정제된 데이터:', recordWithUser);
+    console.log('정제된 데이터:', recordWithUser);
 
     const { data, error } = await supabase
       .from('symptoms')
@@ -235,15 +294,16 @@ const SymptomTracker = () => {
       .select();
 
     if (error) {
-      console.error('Supabase 저장 오류:', error);
-      throw new Error(`저장 실패: ${error.message}`);
+      throw error;
     }
 
-    console.log('Supabase 저장 성공:', data[0]);
+    console.log('저장 성공:', data[0]);
     return data[0];
-  };
+  }, [userName, sanitizeRecord]);
 
   const handleSubmit = useCallback(async () => {
+    if (saving) return; // 중복 실행 방지
+    
     setSaving(true);
     setError(null);
 
@@ -259,9 +319,9 @@ const SymptomTracker = () => {
       setRecords(prev => [savedRecord, ...prev]);
       
       const updatedRecords = [savedRecord, ...records];
-      localStorage.setItem(`symptomRecords_${userName}`, JSON.stringify(updatedRecords));
+      safeLocalStorage.setItem(`symptomRecords_${userName}`, JSON.stringify(updatedRecords));
 
-      // 폼 초기화 (null과 빈 문자열 구분)
+      // 폼 초기화
       setCurrentRecord({
         date: new Date().toISOString().split('T')[0],
         time: new Date().toTimeString().slice(0, 5),
@@ -298,39 +358,41 @@ const SymptomTracker = () => {
       console.log('저장 완료!');
       
     } catch (error) {
-      console.error('저장 실패:', error);
-      setError(error.message);
+      handleError(error, '데이터 저장');
     } finally {
       setSaving(false);
     }
-  }, [currentRecord, records, userName]);
+  }, [saving, currentRecord, records, userName, saveToSupabase, handleError, safeLocalStorage]);
 
-  // 입력 변경 핸들러 - 숫자 필드 처리 개선
+  // 입력 변경 핸들러 - 모바일 최적화
   const handleInputChange = useCallback((field, value) => {
-    const integerFields = [
-      'heart_rate', 'breathing', 'dizziness', 'speech_difficulty', 
-      'measured_heart_rate', 'duration', 'recovery_heart_rate'
-    ];
+    try {
+      const integerFields = [
+        'heart_rate', 'breathing', 'dizziness', 'speech_difficulty', 
+        'measured_heart_rate', 'duration', 'recovery_heart_rate'
+      ];
 
-    let processedValue = value;
+      let processedValue = value;
 
-    if (integerFields.includes(field)) {
-      // 숫자 필드의 경우
-      if (value === '' || value === null || value === undefined) {
-        processedValue = null;
-      } else {
-        const num = parseInt(value, 10);
-        processedValue = isNaN(num) ? null : num;
+      if (integerFields.includes(field)) {
+        if (value === '' || value === null || value === undefined) {
+          processedValue = null;
+        } else {
+          const num = parseInt(value, 10);
+          processedValue = isNaN(num) ? null : num;
+        }
       }
-    }
 
-    setCurrentRecord(prev => ({
-      ...prev,
-      [field]: processedValue
-    }));
+      setCurrentRecord(prev => ({
+        ...prev,
+        [field]: processedValue
+      }));
+    } catch (error) {
+      console.error('입력 처리 오류:', error);
+    }
   }, []);
 
-  const deleteRecord = async (id) => {
+  const deleteRecord = useCallback(async (id) => {
     if (!confirm('정말 삭제하시겠습니까?')) return;
 
     try {
@@ -342,78 +404,512 @@ const SymptomTracker = () => {
         .eq('id', id);
 
       if (error) {
-        throw new Error(`삭제 실패: ${error.message}`);
+        throw error;
       }
 
       const updatedRecords = records.filter(record => record.id !== id);
       setRecords(updatedRecords);
-      localStorage.setItem(`symptomRecords_${userName}`, JSON.stringify(updatedRecords));
+      safeLocalStorage.setItem(`symptomRecords_${userName}`, JSON.stringify(updatedRecords));
       
       console.log('삭제 완료');
     } catch (error) {
-      console.error('삭제 오류:', error);
-      setError(error.message);
+      handleError(error, '데이터 삭제');
     }
-  };
+  }, [records, userName, handleError, safeLocalStorage]);
 
-  // 에러 표시 컴포넌트
-  const ErrorDisplay = () => error && (
-    <div style={{ 
-      backgroundColor: '#FEF2F2', 
-      border: '1px solid #FECACA', 
-      borderRadius: '8px', 
-      padding: '16px', 
-      marginBottom: '16px',
-      color: '#B91C1C'
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>⚠️ 오류 발생</div>
-          <div style={{ fontSize: '14px', marginBottom: '12px' }}>{error}</div>
+  // 에러 표시 컴포넌트 - 모바일 친화적
+  const ErrorDisplay = useCallback(() => {
+    if (!error) return null;
+    
+    return (
+      <div style={{ 
+        backgroundColor: '#FEF2F2', 
+        border: '1px solid #FECACA', 
+        borderRadius: '8px', 
+        padding: '12px', 
+        marginBottom: '16px',
+        color: '#B91C1C',
+        fontSize: isMobile ? '14px' : '16px'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+          <label style={{ 
+            display: 'block', 
+            fontSize: isMobile ? '14px' : '18px', 
+            fontWeight: '500', 
+            marginBottom: '6px' 
+          }}>
+            혈압 (선택사항)
+          </label>
+          <input
+            key="blood-pressure-input"
+            type="text"
+            value={currentRecord.blood_pressure}
+            onChange={(e) => handleInputChange('blood_pressure', e.target.value)}
+            placeholder="예: 120/80"
+            style={mobileStyles.input}
+          />
         </div>
-        <button 
-          onClick={() => setError(null)}
+
+        <div>
+          <label style={{ 
+            display: 'block', 
+            fontSize: isMobile ? '14px' : '18px', 
+            fontWeight: '500', 
+            marginBottom: '6px' 
+          }}>
+            특이사항 (선택사항)
+          </label>
+          <textarea
+            key="notes-textarea"
+            value={currentRecord.notes}
+            onChange={(e) => handleInputChange('notes', e.target.value)}
+            placeholder="특별히 기억할 만한 내용이 있다면..."
+            style={{ 
+              ...mobileStyles.input,
+              height: isMobile ? '80px' : '96px',
+              resize: 'vertical'
+            }}
+          />
+        </div>
+      </div>
+
+      <div style={{ marginTop: '24px', textAlign: 'center' }}>
+        <button
+          onClick={handleSubmit}
+          disabled={saving || connectionStatus !== 'connected'}
           style={{ 
-            background: 'none', 
-            border: 'none', 
-            color: '#B91C1C', 
-            cursor: 'pointer',
-            fontSize: '20px',
-            padding: '0 4px'
+            ...mobileStyles.button,
+            width: '100%', 
+            backgroundColor: connectionStatus === 'connected' ? '#3B82F6' : '#9CA3AF', 
+            color: 'white',
+            fontSize: isMobile ? '16px' : '20px',
+            fontWeight: '600',
+            opacity: saving ? 0.5 : 1
           }}
         >
-          ×
+          {saving ? '저장 중...' : connectionStatus === 'connected' ? '저장하기' : '오프라인'}
         </button>
       </div>
     </div>
-  );
+  ), [currentRecord, userName, saving, handleInputChange, handleSubmit, error, connectionStatus, isMobile, mobileStyles]);
 
-  // 연결 상태 표시
-  const ConnectionStatus = () => (
+  if (showForm) {
+    return simpleFormContent;
+  }
+
+  if (loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        minHeight: '100vh',
+        padding: '20px'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ 
+            fontSize: isMobile ? '36px' : '48px', 
+            marginBottom: '16px' 
+          }}>
+            ⟳
+          </div>
+          <p style={{ 
+            fontSize: isMobile ? '16px' : '18px',
+            color: '#6B7280'
+          }}>
+            데이터를 불러오는 중...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ 
+      maxWidth: isMobile ? '100%' : '1024px', 
+      margin: '0 auto', 
+      padding: isMobile ? '16px' : '24px', 
+      backgroundColor: 'white', 
+      minHeight: '100vh' 
+    }}>
+      <ErrorDisplay />
+      
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          marginBottom: '8px',
+          flexWrap: 'wrap',
+          gap: '8px'
+        }}>
+          <h1 style={{ 
+            fontSize: isMobile ? '24px' : '30px', 
+            fontWeight: 'bold', 
+            color: '#111827',
+            margin: 0
+          }}>
+            증상 기록 관리
+          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span style={{ 
+              fontSize: isMobile ? '12px' : '14px', 
+              color: '#6B7280',
+              backgroundColor: '#F3F4F6',
+              padding: '4px 8px',
+              borderRadius: '12px'
+            }}>
+              👤 {userName}
+            </span>
+            <button
+              onClick={changeUser}
+              style={{
+                fontSize: '11px',
+                padding: '4px 6px',
+                backgroundColor: '#EF4444',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                minHeight: '28px'
+              }}
+            >
+              사용자 변경
+            </button>
+          </div>
+        </div>
+        <p style={{ 
+          color: '#6B7280', 
+          fontSize: isMobile ? '14px' : '16px',
+          lineHeight: '1.5',
+          margin: '8px 0'
+        }}>
+          체계적인 증상 기록으로 패턴을 파악하고 의료진과 효과적으로 소통하세요.
+        </p>
+        
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '12px', 
+          marginTop: '8px', 
+          flexWrap: 'wrap' 
+        }}>
+          <ConnectionStatus />
+        </div>
+      </div>
+
+      <div style={{ 
+        display: 'flex', 
+        gap: isMobile ? '8px' : '16px', 
+        marginBottom: '20px', 
+        flexWrap: 'wrap' 
+      }}>
+        <button
+          onClick={() => {
+            setDetailMode(false);
+            setShowForm(true);
+          }}
+          disabled={connectionStatus !== 'connected'}
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '6px', 
+            padding: isMobile ? '10px 16px' : '12px 24px', 
+            backgroundColor: connectionStatus === 'connected' ? '#3B82F6' : '#9CA3AF', 
+            color: 'white', 
+            border: 'none', 
+            borderRadius: '8px',
+            fontSize: isMobile ? '14px' : '18px',
+            fontWeight: '500',
+            cursor: connectionStatus === 'connected' ? 'pointer' : 'not-allowed',
+            minHeight: '44px'
+          }}
+        >
+          <span style={{ fontSize: isMobile ? '16px' : '20px' }}>+</span> 
+          {isMobile ? '기록' : '빠른 기록'}
+        </button>
+        <button
+          onClick={() => {
+            setDetailMode(true);
+            setShowForm(true);
+          }}
+          disabled={connectionStatus !== 'connected'}
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '4px', 
+            padding: isMobile ? '8px 12px' : '8px 16px', 
+            backgroundColor: connectionStatus === 'connected' ? '#10B981' : '#9CA3AF', 
+            color: 'white', 
+            border: 'none', 
+            borderRadius: '4px',
+            cursor: connectionStatus === 'connected' ? 'pointer' : 'not-allowed',
+            fontSize: isMobile ? '12px' : '14px',
+            minHeight: '40px'
+          }}
+        >
+          📋 {isMobile ? '상세' : '상세 기록'}
+        </button>
+      </div>
+
+      {/* 연결 상태 안내 */}
+      {connectionStatus !== 'connected' && (
+        <div style={{ 
+          background: 'linear-gradient(to right, #FEF3C7, #FDE68A)', 
+          padding: '12px', 
+          borderRadius: '8px', 
+          marginBottom: '16px',
+          border: '1px solid #F59E0B'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: isMobile ? '20px' : '24px' }}>⚠️</span>
+            <div>
+              <h3 style={{ 
+                fontWeight: '600', 
+                color: '#92400E', 
+                marginBottom: '4px',
+                fontSize: isMobile ? '14px' : '16px'
+              }}>
+                데이터베이스 연결 필요
+              </h3>
+              <p style={{ 
+                fontSize: isMobile ? '12px' : '14px', 
+                color: '#78350F', 
+                margin: 0,
+                lineHeight: '1.4'
+              }}>
+                새 기록을 저장하려면 데이터베이스 연결이 필요합니다. 인터넷 연결을 확인하고 페이지를 새로고침해주세요.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PWA 설치 안내 */}
+      <div style={{ 
+        background: 'linear-gradient(to right, #EBF8FF, #F3E8FF)', 
+        padding: '12px', 
+        borderRadius: '8px', 
+        marginBottom: '16px',
+        border: '1px solid #BFDBFE'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: isMobile ? '20px' : '24px' }}>📱</span>
+          <div>
+            <h3 style={{ 
+              fontWeight: '600', 
+              color: '#111827', 
+              marginBottom: '4px',
+              fontSize: isMobile ? '14px' : '16px'
+            }}>
+              앱처럼 사용하기
+            </h3>
+            <p style={{ 
+              fontSize: isMobile ? '12px' : '14px', 
+              color: '#6B7280', 
+              margin: 0,
+              lineHeight: '1.4'
+            }}>
+              브라우저 메뉴에서 "홈 화면에 추가"를 선택하면 스마트폰 앱처럼 사용할 수 있습니다.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {records.length === 0 ? (
+          <div style={{ 
+            textAlign: 'center', 
+            padding: isMobile ? '32px 16px' : '48px 0', 
+            color: '#6B7280' 
+          }}>
+            <div style={{ 
+              fontSize: isMobile ? '36px' : '48px', 
+              marginBottom: '12px', 
+              opacity: 0.5 
+            }}>
+              📝
+            </div>
+            <p style={{ 
+              fontSize: isMobile ? '16px' : '18px', 
+              marginBottom: '8px' 
+            }}>
+              아직 기록된 증상이 없습니다.
+            </p>
+            <p style={{ fontSize: isMobile ? '14px' : '16px' }}>
+              위의 "기록" 버튼으로 간편하게 시작해보세요.
+            </p>
+          </div>
+        ) : (
+          records.map((record) => (
+            <div 
+              key={record.id} 
+              style={{ 
+                border: '1px solid #E5E7EB', 
+                borderRadius: '8px', 
+                padding: isMobile ? '12px' : '16px', 
+                backgroundColor: '#F9FAFB'
+              }}
+            >
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'flex-start', 
+                marginBottom: '12px',
+                gap: '8px'
+              }}>
+                <div style={{ flex: 1 }}>
+                  <h3 style={{ 
+                    fontSize: isMobile ? '16px' : '18px', 
+                    fontWeight: '600', 
+                    marginBottom: '4px',
+                    margin: 0,
+                    lineHeight: '1.3'
+                  }}>
+                    {record.date} {record.time}
+                  </h3>
+                  <p style={{ 
+                    color: '#6B7280', 
+                    margin: 0,
+                    fontSize: isMobile ? '14px' : '16px'
+                  }}>
+                    {record.activity}
+                  </p>
+                </div>
+                <button
+                  onClick={() => deleteRecord(record.id)}
+                  disabled={connectionStatus !== 'connected'}
+                  style={{ 
+                    color: connectionStatus === 'connected' ? '#EF4444' : '#9CA3AF', 
+                    backgroundColor: 'transparent', 
+                    border: 'none', 
+                    cursor: connectionStatus === 'connected' ? 'pointer' : 'not-allowed',
+                    padding: '4px',
+                    fontSize: '14px',
+                    minWidth: '28px',
+                    minHeight: '28px'
+                  }}
+                >
+                  🗑️
+                </button>
+              </div>
+              
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(150px, 1fr))', 
+                gap: isMobile ? '8px' : '12px', 
+                fontSize: isMobile ? '13px' : '14px'
+              }}>
+                <div>
+                  <span style={{ fontWeight: '500' }}>지속시간:</span>{' '}
+                  {record.duration ? `${record.duration}분` : '기록 없음'}
+                </div>
+                <div>
+                  <span style={{ fontWeight: '500' }}>두근거림:</span>{' '}
+                  {record.heart_rate ? `${record.heart_rate}/10` : '기록 없음'}
+                </div>
+                <div>
+                  <span style={{ fontWeight: '500' }}>혈압:</span>{' '}
+                  {record.blood_pressure || '기록 없음'}
+                </div>
+              </div>
+              
+              {record.notes && (
+                <div style={{ 
+                  marginTop: '8px', 
+                  fontSize: isMobile ? '13px' : '14px', 
+                  backgroundColor: 'white', 
+                  padding: '8px', 
+                  borderRadius: '4px',
+                  lineHeight: '1.4'
+                }}>
+                  <span style={{ fontWeight: '500' }}>메모:</span> {record.notes}
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default SymptomTracker;
+            <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>⚠️ 오류</div>
+            <div style={{ fontSize: isMobile ? '12px' : '14px' }}>{error}</div>
+          </div>
+          <button 
+            onClick={() => setError(null)}
+            style={{ 
+              background: 'none', 
+              border: 'none', 
+              color: '#B91C1C', 
+              cursor: 'pointer',
+              fontSize: '18px',
+              padding: '0 4px',
+              minWidth: '24px',
+              minHeight: '24px'
+            }}
+          >
+            ×
+          </button>
+        </div>
+      </div>
+    );
+  }, [error, isMobile]);
+
+  // 연결 상태 표시 - 모바일 최적화
+  const ConnectionStatus = useCallback(() => (
     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-      <span style={{ fontSize: '16px' }}>
+      <span style={{ fontSize: '14px' }}>
         {connectionStatus === 'connected' ? '📶' : 
          connectionStatus === 'offline' ? '📵' : '🔄'}
       </span>
-      <span style={{ fontSize: '14px', color: 
-        connectionStatus === 'connected' ? '#10B981' : 
-        connectionStatus === 'offline' ? '#EF4444' : '#F59E0B' 
+      <span style={{ 
+        fontSize: isMobile ? '12px' : '14px', 
+        color: connectionStatus === 'connected' ? '#10B981' : 
+               connectionStatus === 'offline' ? '#EF4444' : '#F59E0B' 
       }}>
-        {connectionStatus === 'connected' ? '온라인 - 클라우드 동기화 활성' : 
-         connectionStatus === 'offline' ? '오프라인 - 연결 실패' : '연결 확인 중...'}
+        {connectionStatus === 'connected' ? '온라인' : 
+         connectionStatus === 'offline' ? '오프라인' : '연결 중...'}
       </span>
     </div>
-  );
+  ), [connectionStatus, isMobile]);
+
+  // 모바일 스타일 개선
+  const mobileStyles = useMemo(() => ({
+    container: {
+      maxWidth: isMobile ? '100%' : '400px',
+      margin: '0 auto',
+      padding: isMobile ? '16px' : '24px',
+      backgroundColor: 'white',
+      minHeight: '100vh'
+    },
+    input: {
+      width: '100%',
+      padding: isMobile ? '12px' : '16px',
+      border: '1px solid #D1D5DB',
+      borderRadius: '8px',
+      fontSize: isMobile ? '16px' : '18px', // iOS에서 줌 방지를 위해 16px 이상
+      outline: 'none',
+      boxSizing: 'border-box'
+    },
+    button: {
+      padding: isMobile ? '12px 16px' : '16px 24px',
+      fontSize: isMobile ? '14px' : '16px',
+      borderRadius: '8px',
+      border: 'none',
+      cursor: 'pointer',
+      minHeight: '44px' // 터치 친화적 크기
+    }
+  }), [isMobile]);
 
   // 사용자 설정 화면
   if (showUserSetup) {
     return (
       <div style={{ 
-        maxWidth: '400px', 
-        margin: '0 auto', 
-        padding: '24px', 
-        backgroundColor: 'white', 
-        minHeight: '100vh',
+        ...mobileStyles.container,
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'center'
@@ -421,10 +917,19 @@ const SymptomTracker = () => {
         <ErrorDisplay />
         
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: '#111827', marginBottom: '8px' }}>
+          <h1 style={{ 
+            fontSize: isMobile ? '24px' : '28px', 
+            fontWeight: 'bold', 
+            color: '#111827', 
+            marginBottom: '8px' 
+          }}>
             증상 기록 앱
           </h1>
-          <p style={{ color: '#6B7280', fontSize: '16px' }}>
+          <p style={{ 
+            color: '#6B7280', 
+            fontSize: isMobile ? '14px' : '16px',
+            lineHeight: '1.5'
+          }}>
             개인별 기록 관리를 위해 사용자 이름을 입력해주세요
           </p>
           
@@ -436,7 +941,7 @@ const SymptomTracker = () => {
         <div style={{ marginBottom: '24px' }}>
           <label style={{ 
             display: 'block', 
-            fontSize: '18px', 
+            fontSize: isMobile ? '16px' : '18px', 
             fontWeight: '500', 
             marginBottom: '8px',
             color: '#374151'
@@ -448,42 +953,31 @@ const SymptomTracker = () => {
             value={tempUserName}
             onChange={(e) => setTempUserName(e.target.value)}
             placeholder="예: 김아버지, 김철수 등"
-            style={{ 
-              width: '100%', 
-              padding: '16px', 
-              border: '2px solid #D1D5DB', 
-              borderRadius: '8px', 
-              fontSize: '18px',
-              outline: 'none'
-            }}
+            style={mobileStyles.input}
             onKeyPress={(e) => e.key === 'Enter' && handleUserSetup()}
           />
         </div>
 
         <button
           onClick={handleUserSetup}
-          disabled={!tempUserName.trim() || connectionStatus !== 'connected'}
+          disabled={!tempUserName || !tempUserName.trim() || connectionStatus !== 'connected'}
           style={{ 
+            ...mobileStyles.button,
             width: '100%', 
-            padding: '16px 24px', 
-            backgroundColor: (tempUserName.trim() && connectionStatus === 'connected') ? '#3B82F6' : '#9CA3AF', 
+            backgroundColor: (tempUserName && tempUserName.trim() && connectionStatus === 'connected') ? '#3B82F6' : '#9CA3AF', 
             color: 'white', 
-            border: 'none', 
-            borderRadius: '8px',
-            fontSize: '18px',
-            fontWeight: '600',
-            cursor: (tempUserName.trim() && connectionStatus === 'connected') ? 'pointer' : 'not-allowed'
+            fontWeight: '600'
           }}
         >
-          {connectionStatus === 'connected' ? '시작하기' : '데이터베이스 연결 대기 중...'}
+          {connectionStatus === 'connected' ? '시작하기' : '연결 대기 중...'}
         </button>
 
         <div style={{ 
-          marginTop: '32px', 
+          marginTop: '24px', 
           padding: '16px', 
           backgroundColor: '#F3F4F6', 
           borderRadius: '8px',
-          fontSize: '14px',
+          fontSize: isMobile ? '12px' : '14px',
           color: '#6B7280'
         }}>
           <p style={{ margin: 0, marginBottom: '8px' }}>💡 <strong>안내사항:</strong></p>
@@ -498,16 +992,29 @@ const SymptomTracker = () => {
     );
   }
 
-  // 간단 모드 폼
+  // 간단 모드 폼 - 모바일 최적화
   const simpleFormContent = useMemo(() => (
-    <div style={{ maxWidth: '400px', margin: '0 auto', padding: '24px', backgroundColor: 'white', minHeight: '100vh' }}>
+    <div style={mobileStyles.container}>
       <ErrorDisplay />
       
-      <div style={{ marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#111827' }}>빠른 기록</h1>
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          marginBottom: '8px',
+          flexWrap: 'wrap'
+        }}>
+          <h1 style={{ 
+            fontSize: isMobile ? '20px' : '24px', 
+            fontWeight: 'bold', 
+            color: '#111827',
+            margin: 0
+          }}>
+            빠른 기록
+          </h1>
           <span style={{ 
-            fontSize: '14px', 
+            fontSize: '12px', 
             color: '#6B7280',
             backgroundColor: '#F3F4F6',
             padding: '4px 8px',
@@ -516,19 +1023,21 @@ const SymptomTracker = () => {
             👤 {userName}
           </span>
         </div>
-        <div style={{ marginBottom: '8px' }}>
+        <div style={{ marginBottom: '12px' }}>
           <ConnectionStatus />
         </div>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <div style={{ 
+          display: 'flex', 
+          gap: '8px', 
+          flexWrap: 'wrap'
+        }}>
           <button
             onClick={() => setShowForm(false)}
             style={{ 
-              padding: '8px 16px', 
+              ...mobileStyles.button,
+              padding: '8px 12px',
               backgroundColor: '#6B7280', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '4px',
-              cursor: 'pointer'
+              color: 'white'
             }}
           >
             취소
@@ -537,12 +1046,10 @@ const SymptomTracker = () => {
             onClick={handleSubmit}
             disabled={saving || connectionStatus !== 'connected'}
             style={{ 
-              padding: '8px 16px', 
+              ...mobileStyles.button,
+              padding: '8px 12px',
               backgroundColor: connectionStatus === 'connected' ? '#3B82F6' : '#9CA3AF', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '4px',
-              cursor: (saving || connectionStatus !== 'connected') ? 'not-allowed' : 'pointer',
+              color: 'white',
               opacity: saving ? 0.5 : 1
             }}
           >
@@ -551,13 +1058,11 @@ const SymptomTracker = () => {
           <button
             onClick={() => setDetailMode(true)}
             style={{ 
-              padding: '8px 12px', 
+              ...mobileStyles.button,
+              padding: '8px 12px',
               backgroundColor: '#10B981', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px'
+              color: 'white',
+              fontSize: isMobile ? '12px' : '14px'
             }}
           >
             상세모드
@@ -565,55 +1070,62 @@ const SymptomTracker = () => {
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? '16px' : '24px' }}>
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', 
+          gap: '12px' 
+        }}>
           <div>
-            <label style={{ display: 'block', fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>날짜</label>
+            <label style={{ 
+              display: 'block', 
+              fontSize: isMobile ? '14px' : '18px', 
+              fontWeight: '500', 
+              marginBottom: '6px' 
+            }}>
+              날짜
+            </label>
             <input
               key="date-input"
               type="date"
               value={currentRecord.date}
               onChange={(e) => handleInputChange('date', e.target.value)}
-              style={{ 
-                width: '100%', 
-                padding: '16px', 
-                border: '1px solid #D1D5DB', 
-                borderRadius: '8px', 
-                fontSize: '18px'
-              }}
+              style={mobileStyles.input}
             />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>시간</label>
+            <label style={{ 
+              display: 'block', 
+              fontSize: isMobile ? '14px' : '18px', 
+              fontWeight: '500', 
+              marginBottom: '6px' 
+            }}>
+              시간
+            </label>
             <input
               key="time-input"
               type="time"
               value={currentRecord.time}
               onChange={(e) => handleInputChange('time', e.target.value)}
-              style={{ 
-                width: '100%', 
-                padding: '16px', 
-                border: '1px solid #D1D5DB', 
-                borderRadius: '8px', 
-                fontSize: '18px'
-              }}
+              style={mobileStyles.input}
             />
           </div>
         </div>
 
         <div>
-          <label style={{ display: 'block', fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>당시 하고 있던 일</label>
+          <label style={{ 
+            display: 'block', 
+            fontSize: isMobile ? '14px' : '18px', 
+            fontWeight: '500', 
+            marginBottom: '6px' 
+          }}>
+            당시 하고 있던 일
+          </label>
           <select
             key="activity-select"
             value={currentRecord.activity}
             onChange={(e) => handleInputChange('activity', e.target.value)}
-            style={{ 
-              width: '100%', 
-              padding: '16px', 
-              border: '1px solid #D1D5DB', 
-              borderRadius: '8px', 
-              fontSize: '18px'
-            }}
+            style={mobileStyles.input}
           >
             <option value="">선택하세요</option>
             <option value="커피 마시기">커피 마시기</option>
@@ -627,18 +1139,19 @@ const SymptomTracker = () => {
         </div>
 
         <div>
-          <label style={{ display: 'block', fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>두근거림 정도</label>
+          <label style={{ 
+            display: 'block', 
+            fontSize: isMobile ? '14px' : '18px', 
+            fontWeight: '500', 
+            marginBottom: '6px' 
+          }}>
+            두근거림 정도
+          </label>
           <select
             key="heart-rate-select"
             value={currentRecord.heart_rate || ''}
             onChange={(e) => handleInputChange('heart_rate', e.target.value)}
-            style={{ 
-              width: '100%', 
-              padding: '16px', 
-              border: '1px solid #D1D5DB', 
-              borderRadius: '8px', 
-              fontSize: '18px'
-            }}
+            style={mobileStyles.input}
           >
             <option value="">선택하세요</option>
             {[1,2,3,4,5,6,7,8,9,10].map(num => (
@@ -650,18 +1163,19 @@ const SymptomTracker = () => {
         </div>
 
         <div>
-          <label style={{ display: 'block', fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>지속 시간</label>
+          <label style={{ 
+            display: 'block', 
+            fontSize: isMobile ? '14px' : '18px', 
+            fontWeight: '500', 
+            marginBottom: '6px' 
+          }}>
+            지속 시간
+          </label>
           <select
             key="duration-select"
             value={currentRecord.duration || ''}
             onChange={(e) => handleInputChange('duration', e.target.value)}
-            style={{ 
-              width: '100%', 
-              padding: '16px', 
-              border: '1px solid #D1D5DB', 
-              borderRadius: '8px', 
-              fontSize: '18px'
-            }}
+            style={mobileStyles.input}
           >
             <option value="">선택하세요</option>
             <option value="5">5분 미만</option>
@@ -673,753 +1187,3 @@ const SymptomTracker = () => {
         </div>
 
         <div>
-          <label style={{ display: 'block', fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>혈압 (선택사항)</label>
-          <input
-            key="blood-pressure-input"
-            type="text"
-            value={currentRecord.blood_pressure}
-            onChange={(e) => handleInputChange('blood_pressure', e.target.value)}
-            placeholder="예: 120/80"
-            style={{ 
-              width: '100%', 
-              padding: '16px', 
-              border: '1px solid #D1D5DB', 
-              borderRadius: '8px', 
-              fontSize: '18px'
-            }}
-          />
-        </div>
-
-        <div>
-          <label style={{ display: 'block', fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>특이사항 (선택사항)</label>
-          <textarea
-            key="notes-textarea"
-            value={currentRecord.notes}
-            onChange={(e) => handleInputChange('notes', e.target.value)}
-            placeholder="특별히 기억할 만한 내용이 있다면..."
-            style={{ 
-              width: '100%', 
-              padding: '16px', 
-              border: '1px solid #D1D5DB', 
-              borderRadius: '8px', 
-              fontSize: '18px',
-              height: '96px',
-              resize: 'vertical'
-            }}
-          />
-        </div>
-      </div>
-
-      <div style={{ marginTop: '32px', textAlign: 'center' }}>
-        <button
-          onClick={handleSubmit}
-          disabled={saving || connectionStatus !== 'connected'}
-          style={{ 
-            width: '100%', 
-            padding: '16px 24px', 
-            backgroundColor: connectionStatus === 'connected' ? '#3B82F6' : '#9CA3AF', 
-            color: 'white', 
-            border: 'none', 
-            borderRadius: '8px',
-            fontSize: '20px',
-            cursor: (saving || connectionStatus !== 'connected') ? 'not-allowed' : 'pointer',
-            opacity: saving ? 0.5 : 1
-          }}
-        >
-          {saving ? '저장 중...' : connectionStatus === 'connected' ? '저장하기' : '오프라인'}
-        </button>
-      </div>
-    </div>
-  ), [currentRecord, userName, saving, handleInputChange, handleSubmit, error, connectionStatus]);
-
-  // 상세 모드 폼
-  const detailedFormContent = useMemo(() => (
-    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '24px', backgroundColor: 'white', minHeight: '100vh' }}>
-      <ErrorDisplay />
-      
-      <div style={{ marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#111827' }}>상세 증상 기록</h1>
-          <span style={{ 
-            fontSize: '14px', 
-            color: '#6B7280',
-            backgroundColor: '#F3F4F6',
-            padding: '4px 8px',
-            borderRadius: '12px'
-          }}>
-            👤 {userName}
-          </span>
-        </div>
-        <div style={{ marginBottom: '8px' }}>
-          <ConnectionStatus />
-        </div>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button
-            onClick={() => setShowForm(false)}
-            style={{ 
-              padding: '8px 16px', 
-              backgroundColor: '#6B7280', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '4px',
-              cursor: 'pointer'
-            }}
-          >
-            취소
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={saving || connectionStatus !== 'connected'}
-            style={{ 
-              padding: '8px 16px', 
-              backgroundColor: connectionStatus === 'connected' ? '#3B82F6' : '#9CA3AF', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '4px',
-              cursor: (saving || connectionStatus !== 'connected') ? 'not-allowed' : 'pointer',
-              opacity: saving ? 0.5 : 1
-            }}
-          >
-            {saving ? '저장 중...' : connectionStatus === 'connected' ? '저장' : '오프라인'}
-          </button>
-          <button
-            onClick={() => setDetailMode(false)}
-            style={{ 
-              padding: '8px 12px', 
-              backgroundColor: '#10B981', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            간단모드
-          </button>
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        {/* ① 시각·상황 */}
-        <div style={{ backgroundColor: '#EBF8FF', padding: '16px', borderRadius: '8px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px', color: '#1E40AF' }}>① 시각·상황</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>날짜</label>
-              <input
-                key="detail-date-input"
-                type="date"
-                value={currentRecord.date}
-                onChange={(e) => handleInputChange('date', e.target.value)}
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>시간</label>
-              <input
-                key="detail-time-input"
-                type="time"
-                value={currentRecord.time}
-                onChange={(e) => handleInputChange('time', e.target.value)}
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>당시 하고 있던 일</label>
-              <input
-                key="detail-activity-input"
-                type="text"
-                value={currentRecord.activity}
-                onChange={(e) => handleInputChange('activity', e.target.value)}
-                placeholder="집중 작업, 대화, 운동, 식사, 커피 등"
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>많이 사용한 신체 부위</label>
-              <input
-                key="detail-body-part-input"
-                type="text"
-                value={currentRecord.body_part}
-                onChange={(e) => handleInputChange('body_part', e.target.value)}
-                placeholder="어깨 근육, 거북목, 구부정한 자세 등"
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>1시간 내 섭취한 음식·음료</label>
-              <input
-                key="detail-intake-input"
-                type="text"
-                value={currentRecord.intake}
-                onChange={(e) => handleInputChange('intake', e.target.value)}
-                placeholder="특히 카페인·알코올"
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* ② 증상 시작 */}
-        <div style={{ backgroundColor: '#FEF3C7', padding: '16px', borderRadius: '8px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px', color: '#92400E' }}>② 증상 시작</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>증상 시작 순간의 느낌</label>
-              <input
-                key="detail-start-feeling-input"
-                type="text"
-                value={currentRecord.start_feeling}
-                onChange={(e) => handleInputChange('start_feeling', e.target.value)}
-                placeholder="심장이 갑자기 빨라짐, 몸이 붕 뜨는 느낌, 땅으로 꺼지는 느낌"
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>시작 양상</label>
-              <select
-                key="detail-start-type-select"
-                value={currentRecord.start_type}
-                onChange={(e) => handleInputChange('start_type', e.target.value)}
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              >
-                <option value="">선택하세요</option>
-                <option value="갑작스러움">갑작스러움</option>
-                <option value="서서히">서서히</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>전조 증상</label>
-              <input
-                key="detail-premonition-input"
-                type="text"
-                value={currentRecord.premonition}
-                onChange={(e) => handleInputChange('premonition', e.target.value)}
-                placeholder="두통, 흉부 압박감, 시야 흐림 등"
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* ③ 증상 진행 */}
-        <div style={{ backgroundColor: '#FEE2E2', padding: '16px', borderRadius: '8px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px', color: '#991B1B' }}>③ 증상 진행</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>두근거림 정도 (1-10)</label>
-              <select
-                key="detail-heart-rate-select"
-                value={currentRecord.heart_rate || ''}
-                onChange={(e) => handleInputChange('heart_rate', e.target.value)}
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              >
-                <option value="">선택하세요</option>
-                {[1,2,3,4,5,6,7,8,9,10].map(num => (
-                  <option key={num} value={num}>{num}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>식은땀 위치 및 양</label>
-              <input
-                key="detail-sweating-input"
-                type="text"
-                value={currentRecord.sweating}
-                onChange={(e) => handleInputChange('sweating', e.target.value)}
-                placeholder="이마, 등, 손바닥 등"
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>호흡 곤란 정도 (1-10)</label>
-              <select
-                key="detail-breathing-select"
-                value={currentRecord.breathing || ''}
-                onChange={(e) => handleInputChange('breathing', e.target.value)}
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              >
-                <option value="">선택하세요</option>
-                {[1,2,3,4,5,6,7,8,9,10].map(num => (
-                  <option key={num} value={num}>{num}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>어지럼/중심잡기 어려움 (1-10)</label>
-              <select
-                key="detail-dizziness-select"
-                value={currentRecord.dizziness || ''}
-                onChange={(e) => handleInputChange('dizziness', e.target.value)}
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              >
-                <option value="">선택하세요</option>
-                {[1,2,3,4,5,6,7,8,9,10].map(num => (
-                  <option key={num} value={num}>{num}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>근육 힘 빠짐 정도</label>
-              <select
-                key="detail-weakness-select"
-                value={currentRecord.weakness}
-                onChange={(e) => handleInputChange('weakness', e.target.value)}
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              >
-                <option value="">선택하세요</option>
-                <option value="서있기 가능">서있기 가능</option>
-                <option value="앉아야 함">앉아야 함</option>
-                <option value="누워야 함">누워야 함</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>말하기 힘든 정도 (1-10)</label>
-              <select
-                key="detail-speech-difficulty-select"
-                value={currentRecord.speech_difficulty || ''}
-                onChange={(e) => handleInputChange('speech_difficulty', e.target.value)}
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              >
-                <option value="">선택하세요</option>
-                {[1,2,3,4,5,6,7,8,9,10].map(num => (
-                  <option key={num} value={num}>{num}</option>
-                ))}
-              </select>
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>흉통/흉부 불편감</label>
-              <input
-                key="detail-chest-pain-input"
-                type="text"
-                value={currentRecord.chest_pain}
-                onChange={(e) => handleInputChange('chest_pain', e.target.value)}
-                placeholder="위치, 정도, 특징 등"
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* ④ 객관적 수치 */}
-        <div style={{ backgroundColor: '#ECFDF5', padding: '16px', borderRadius: '8px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px', color: '#065F46' }}>④ 객관적 수치</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>심박수 (bpm)</label>
-              <input
-                key="detail-measured-heart-rate-input"
-                type="number"
-                value={currentRecord.measured_heart_rate || ''}
-                onChange={(e) => handleInputChange('measured_heart_rate', e.target.value)}
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>심전도 기록</label>
-              <select
-                key="detail-ecg-taken-select"
-                value={currentRecord.ecg_taken}
-                onChange={(e) => handleInputChange('ecg_taken', e.target.value === 'true')}
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              >
-                <option value="false">아니오</option>
-                <option value="true">예</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>혈압</label>
-              <input
-                key="detail-blood-pressure-input"
-                type="text"
-                value={currentRecord.blood_pressure}
-                onChange={(e) => handleInputChange('blood_pressure', e.target.value)}
-                placeholder="예: 120/80"
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>혈당</label>
-              <input
-                key="detail-blood-sugar-input"
-                type="text"
-                value={currentRecord.blood_sugar}
-                onChange={(e) => handleInputChange('blood_sugar', e.target.value)}
-                placeholder="예: 90 mg/dL"
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* ⑤ 지속 시간 및 종료 후 상태 */}
-        <div style={{ backgroundColor: '#F3E8FF', padding: '16px', borderRadius: '8px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px', color: '#6B21A8' }}>⑤ 지속 시간 및 종료 후 상태</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>증상 지속 시간 (분)</label>
-              <input
-                key="detail-duration-input"
-                type="number"
-                value={currentRecord.duration || ''}
-                onChange={(e) => handleInputChange('duration', e.target.value)}
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>종료 후 남은 불편감</label>
-              <input
-                key="detail-after-effects-input"
-                type="text"
-                value={currentRecord.after_effects}
-                onChange={(e) => handleInputChange('after_effects', e.target.value)}
-                placeholder="피로, 무기력, 두통 등"
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>회복 후 심박수</label>
-              <input
-                key="detail-recovery-heart-rate-input"
-                type="number"
-                value={currentRecord.recovery_heart_rate || ''}
-                onChange={(e) => handleInputChange('recovery_heart_rate', e.target.value)}
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>회복 후 혈압</label>
-              <input
-                key="detail-recovery-blood-pressure-input"
-                type="text"
-                value={currentRecord.recovery_blood_pressure}
-                onChange={(e) => handleInputChange('recovery_blood_pressure', e.target.value)}
-                placeholder="예: 120/80"
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>회복을 위해 시도한 행동</label>
-              <input
-                key="detail-recovery-actions-input"
-                type="text"
-                value={currentRecord.recovery_actions}
-                onChange={(e) => handleInputChange('recovery_actions', e.target.value)}
-                placeholder="간식이나 음료 섭취, 자리에 눕기, 눈 감기 등"
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>해당 행동이 회복에 도움되었나요?</label>
-              <select
-                key="detail-recovery-helpful-select"
-                value={currentRecord.recovery_helpful}
-                onChange={(e) => handleInputChange('recovery_helpful', e.target.value)}
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              >
-                <option value="">선택하세요</option>
-                <option value="매우 도움됨">매우 도움됨</option>
-                <option value="조금 도움됨">조금 도움됨</option>
-                <option value="도움되지 않음">도움되지 않음</option>
-                <option value="악화됨">악화됨</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* ⑥ 기타 참고 */}
-        <div style={{ backgroundColor: '#F9FAFB', padding: '16px', borderRadius: '8px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px', color: '#374151' }}>⑥ 기타 참고</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>최근 며칠간 수면 시간</label>
-              <input
-                key="detail-sleep-hours-input"
-                type="text"
-                value={currentRecord.sleep_hours}
-                onChange={(e) => handleInputChange('sleep_hours', e.target.value)}
-                placeholder="예: 5-6시간"
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>스트레스 상황 여부</label>
-              <input
-                key="detail-stress-input"
-                type="text"
-                value={currentRecord.stress}
-                onChange={(e) => handleInputChange('stress', e.target.value)}
-                placeholder="업무, 인간관계, 건강 등"
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>최근 복용 약물</label>
-              <input
-                key="detail-medications-input"
-                type="text"
-                value={currentRecord.medications}
-                onChange={(e) => handleInputChange('medications', e.target.value)}
-                placeholder="약물명, 용량, 복용 시간"
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>추가 메모</label>
-              <textarea
-                key="detail-notes-textarea"
-                value={currentRecord.notes}
-                onChange={(e) => handleInputChange('notes', e.target.value)}
-                placeholder="기타 특이사항이나 중요하다고 생각되는 내용"
-                style={{ 
-                  width: '100%', 
-                  padding: '8px', 
-                  border: '1px solid #D1D5DB', 
-                  borderRadius: '4px',
-                  height: '80px',
-                  resize: 'vertical'
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ marginTop: '32px', textAlign: 'center' }}>
-        <button
-          onClick={handleSubmit}
-          disabled={saving || connectionStatus !== 'connected'}
-          style={{ 
-            padding: '16px 32px', 
-            backgroundColor: connectionStatus === 'connected' ? '#3B82F6' : '#9CA3AF', 
-            color: 'white', 
-            border: 'none', 
-            borderRadius: '8px',
-            fontSize: '18px',
-            fontWeight: '600',
-            cursor: (saving || connectionStatus !== 'connected') ? 'not-allowed' : 'pointer',
-            opacity: saving ? 0.5 : 1
-          }}
-        >
-          {saving ? '저장 중...' : connectionStatus === 'connected' ? '기록 저장' : '오프라인'}
-        </button>
-      </div>
-    </div>
-  ), [currentRecord, userName, saving, handleInputChange, handleSubmit, error, connectionStatus]);
-
-  if (showForm) {
-    return detailMode ? detailedFormContent : simpleFormContent;
-  }
-
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⟳</div>
-          <p style={{ fontSize: '18px' }}>데이터를 불러오는 중...</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ maxWidth: '1024px', margin: '0 auto', padding: '24px', backgroundColor: 'white', minHeight: '100vh' }}>
-      <ErrorDisplay />
-      
-      <div style={{ marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <h1 style={{ fontSize: '30px', fontWeight: 'bold', color: '#111827' }}>증상 기록 관리</h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ 
-              fontSize: '14px', 
-              color: '#6B7280',
-              backgroundColor: '#F3F4F6',
-              padding: '6px 12px',
-              borderRadius: '16px'
-            }}>
-              👤 {userName}
-            </span>
-            <button
-              onClick={changeUser}
-              style={{
-                fontSize: '12px',
-                padding: '4px 8px',
-                backgroundColor: '#EF4444',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
-            >
-              사용자 변경
-            </button>
-          </div>
-        </div>
-        <p style={{ color: '#6B7280' }}>체계적인 증상 기록으로 패턴을 파악하고 의료진과 효과적으로 소통하세요.</p>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '12px', flexWrap: 'wrap' }}>
-          <ConnectionStatus />
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
-        <button
-          onClick={() => {
-            setDetailMode(false);
-            setShowForm(true);
-          }}
-          disabled={connectionStatus !== 'connected'}
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '8px', 
-            padding: '12px 24px', 
-            backgroundColor: connectionStatus === 'connected' ? '#3B82F6' : '#9CA3AF', 
-            color: 'white', 
-            border: 'none', 
-            borderRadius: '8px',
-            fontSize: '18px',
-            fontWeight: '500',
-            cursor: connectionStatus === 'connected' ? 'pointer' : 'not-allowed'
-          }}
-        >
-          <span style={{ fontSize: '20px' }}>+</span> 빠른 기록
-        </button>
-        <button
-          onClick={() => {
-            setDetailMode(true);
-            setShowForm(true);
-          }}
-          disabled={connectionStatus !== 'connected'}
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '8px', 
-            padding: '8px 16px', 
-            backgroundColor: connectionStatus === 'connected' ? '#10B981' : '#9CA3AF', 
-            color: 'white', 
-            border: 'none', 
-            borderRadius: '4px',
-            cursor: connectionStatus === 'connected' ? 'pointer' : 'not-allowed'
-          }}
-        >
-          📋 상세 기록
-        </button>
-      </div>
-
-      {/* 연결 상태 안내 */}
-      {connectionStatus !== 'connected' && (
-        <div style={{ 
-          background: 'linear-gradient(to right, #FEF3C7, #FDE68A)', 
-          padding: '16px', 
-          borderRadius: '8px', 
-          marginBottom: '24px',
-          border: '1px solid #F59E0B'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '24px' }}>⚠️</span>
-            <div>
-              <h3 style={{ fontWeight: '600', color: '#92400E', marginBottom: '4px' }}>데이터베이스 연결 필요</h3>
-              <p style={{ fontSize: '14px', color: '#78350F', margin: 0 }}>
-                새 기록을 저장하려면 데이터베이스 연결이 필요합니다. 인터넷 연결을 확인하고 페이지를 새로고침해주세요.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* PWA 설치 안내 */}
-      <div style={{ 
-        background: 'linear-gradient(to right, #EBF8FF, #F3E8FF)', 
-        padding: '16px', 
-        borderRadius: '8px', 
-        marginBottom: '24px',
-        border: '1px solid #BFDBFE'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ fontSize: '24px' }}>📱</span>
-          <div>
-            <h3 style={{ fontWeight: '600', color: '#111827', marginBottom: '4px' }}>앱처럼 사용하기</h3>
-            <p style={{ fontSize: '14px', color: '#6B7280', margin: 0 }}>
-              브라우저 메뉴에서 "홈 화면에 추가"를 선택하면 스마트폰 앱처럼 사용할 수 있습니다.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        {records.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '48px 0', color: '#6B7280' }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px', opacity: 0.5 }}>📝</div>
-            <p style={{ fontSize: '18px', marginBottom: '8px' }}>아직 기록된 증상이 없습니다.</p>
-            <p>위의 "빠른 기록" 버튼으로 간편하게 시작해보세요.</p>
-          </div>
-        ) : (
-          records.map((record) => (
-            <div key={record.id} style={{ 
-              border: '1px solid #E5E7EB', 
-              borderRadius: '8px', 
-              padding: '16px', 
-              backgroundColor: '#F9FAFB',
-              transition: 'background-color 0.2s'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-                <div>
-                  <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {record.date} {record.time}
-                  </h3>
-                  <p style={{ color: '#6B7280', margin: 0 }}>{record.activity}</p>
-                </div>
-                <button
-                  onClick={() => deleteRecord(record.id)}
-                  disabled={connectionStatus !== 'connected'}
-                  style={{ 
-                    color: connectionStatus === 'connected' ? '#EF4444' : '#9CA3AF', 
-                    backgroundColor: 'transparent', 
-                    border: 'none', 
-                    cursor: connectionStatus === 'connected' ? 'pointer' : 'not-allowed',
-                    padding: '4px',
-                    fontSize: '16px'
-                  }}
-                >
-                  🗑️
-                </button>
-              </div>
-              
-              <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-                gap: '16px', 
-                fontSize: '14px' 
-              }}>
-                <div>
-                  <span style={{ fontWeight: '500' }}>지속시간:</span> {record.duration ? `${record.duration}분` : '기록 없음'}
-                </div>
-                <div>
-                  <span style={{ fontWeight: '500' }}>두근거림:</span> {record.heart_rate ? `${record.heart_rate}/10` : '기록 없음'}
-                </div>
-                <div>
-                  <span style={{ fontWeight: '500' }}>혈압:</span> {record.blood_pressure || '기록 없음'}
-                </div>
-              </div>
-              
-              {record.notes && (
-                <div style={{ 
-                  marginTop: '8px', 
-                  fontSize: '14px', 
-                  backgroundColor: 'white', 
-                  padding: '8px', 
-                  borderRadius: '4px' 
-                }}>
-                  <span style={{ fontWeight: '500' }}>메모:</span> {record.notes}
-                </div>
-              )}
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
-};
-
-export default SymptomTracker;
