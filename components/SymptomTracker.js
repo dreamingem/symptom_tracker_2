@@ -1,5 +1,5 @@
 // components/SymptomTracker.js
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
 const SymptomTracker = () => {
@@ -38,7 +38,6 @@ const SymptomTracker = () => {
     medications: '',
     notes: ''
   });
-  
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -46,6 +45,7 @@ const SymptomTracker = () => {
   const [error, setError] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState('testing');
 
+  // ---------- helpers ----------
   const sanitizeRecord = (record) => {
     const sanitized = { ...record };
     const integerFields = [
@@ -77,7 +77,7 @@ const SymptomTracker = () => {
 
   const testSupabaseConnection = useCallback(async () => {
     try {
-      const { data, error } = await supabase.from('symptoms').select('count').limit(1);
+      const { error } = await supabase.from('symptoms').select('count').limit(1);
       if (error) {
         setConnectionStatus('offline');
         setError(`데이터베이스 연결 실패: ${error.message}`);
@@ -93,54 +93,6 @@ const SymptomTracker = () => {
     }
   }, []);
 
-  useEffect(() => {
-    const initialize = async () => {
-      try {
-        await testSupabaseConnection();
-        const savedUserName = typeof window !== 'undefined' ? localStorage.getItem('symptom_tracker_user') : null;
-        if (savedUserName) {
-          setUserName(savedUserName);
-          await loadRecords(savedUserName);
-        } else {
-          setShowUserSetup(true);
-        }
-      } catch (error) {
-        setError(`초기화 실패: ${error.message}`);
-        setShowUserSetup(true);
-      } finally {
-        setLoading(false);
-      }
-    };
-    initialize();
-  }, [testSupabaseConnection]);
-
-  const handleUserSetup = useCallback(async () => {
-    try {
-      if (tempUserName.trim()) {
-        const finalUserName = tempUserName.trim();
-        setUserName(finalUserName);
-        localStorage.setItem('symptom_tracker_user', finalUserName);
-        setShowUserSetup(false);
-        await loadRecords(finalUserName);
-      }
-    } catch (error) {
-      setError(`사용자 설정 실패: ${error.message}`);
-    }
-  }, [tempUserName]);
-
-  const changeUser = useCallback(() => {
-    try {
-      localStorage.removeItem('symptom_tracker_user');
-      setUserName('');
-      setTempUserName('');
-      setRecords([]);
-      setShowUserSetup(true);
-      setError(null);
-    } catch (error) {
-      setError(`사용자 변경 실패: ${error.message}`);
-    }
-  }, []);
-
   const loadRecords = async (user) => {
     setLoading(true);
     setError(null);
@@ -153,8 +105,8 @@ const SymptomTracker = () => {
       if (error) throw new Error(`데이터 로드 실패: ${error.message}`);
       setRecords(data || []);
       localStorage.setItem(`symptomRecords_${user}`, JSON.stringify(data || []));
-    } catch (error) {
-      setError(error.message);
+    } catch (e) {
+      setError(e.message);
       try {
         const localData = localStorage.getItem(`symptomRecords_${user}`);
         if (localData) setRecords(JSON.parse(localData));
@@ -166,8 +118,8 @@ const SymptomTracker = () => {
 
   const saveToSupabase = async (record) => {
     const sanitizedRecord = sanitizeRecord(record);
-    const recordWithUser = { 
-      ...sanitizedRecord, 
+    const recordWithUser = {
+      ...sanitizedRecord,
       user_name: userName,
       created_at: new Date().toISOString()
     };
@@ -175,6 +127,56 @@ const SymptomTracker = () => {
     if (error) throw new Error(`저장 실패: ${error.message}`);
     return data[0];
   };
+
+  // ---------- effects ----------
+  useEffect(() => {
+    const initialize = async () => {
+      try {
+        await testSupabaseConnection();
+        const savedUserName = typeof window !== 'undefined' ? localStorage.getItem('symptom_tracker_user') : null;
+        if (savedUserName) {
+          setUserName(savedUserName);
+          await loadRecords(savedUserName);
+        } else {
+          setShowUserSetup(true);
+        }
+      } catch (e) {
+        setError(`초기화 실패: ${e.message}`);
+        setShowUserSetup(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+    initialize();
+  }, [testSupabaseConnection]);
+
+  // ---------- handlers ----------
+  const handleUserSetup = useCallback(async () => {
+    try {
+      if (tempUserName.trim()) {
+        const finalUserName = tempUserName.trim();
+        setUserName(finalUserName);
+        localStorage.setItem('symptom_tracker_user', finalUserName);
+        setShowUserSetup(false);
+        await loadRecords(finalUserName);
+      }
+    } catch (e) {
+      setError(`사용자 설정 실패: ${e.message}`);
+    }
+  }, [tempUserName]);
+
+  const changeUser = useCallback(() => {
+    try {
+      localStorage.removeItem('symptom_tracker_user');
+      setUserName('');
+      setTempUserName('');
+      setRecords([]);
+      setShowUserSetup(true);
+      setError(null);
+    } catch (e) {
+      setError(`사용자 변경 실패: ${e.message}`);
+    }
+  }, []);
 
   const handleSubmit = useCallback(async () => {
     setSaving(true);
@@ -217,8 +219,8 @@ const SymptomTracker = () => {
         notes: ''
       });
       setShowForm(false);
-    } catch (error) {
-      setError(error.message);
+    } catch (e) {
+      setError(e.message);
     } finally {
       setSaving(false);
     }
@@ -241,25 +243,13 @@ const SymptomTracker = () => {
     setCurrentRecord(prev => ({ ...prev, [field]: processedValue }));
   }, []);
 
-  const deleteRecord = async (id) => {
-    if (!confirm('정말 삭제하시겠습니까?')) return;
-    try {
-      const { error } = await supabase.from('symptoms').delete().eq('id', id);
-      if (error) throw new Error(`삭제 실패: ${error.message}`);
-      const updatedRecords = records.filter(record => record.id !== id);
-      setRecords(updatedRecords);
-      localStorage.setItem(`symptomRecords_${userName}`, JSON.stringify(updatedRecords));
-    } catch (error) {
-      setError(error.message);
-    }
-  };
-
+  // ---------- small components (no hooks inside) ----------
   const ErrorDisplay = () => error && (
-    <div className="st-error" style={{ 
-      backgroundColor: '#FEF2F2', 
-      border: '1px solid #FECACA', 
-      borderRadius: '8px', 
-      padding: '16px', 
+    <div className="st-error" style={{
+      backgroundColor: '#FEF2F2',
+      border: '1px solid #FECACA',
+      borderRadius: '8px',
+      padding: '16px',
       marginBottom: '16px',
       color: '#B91C1C'
     }}>
@@ -268,7 +258,7 @@ const SymptomTracker = () => {
           <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>⚠️ 오류 발생</div>
           <div style={{ fontSize: '14px', marginBottom: '12px' }}>{error}</div>
         </div>
-        <button 
+        <button
           onClick={() => setError(null)}
           className="btn-ghost"
           style={{ background: 'none', border: 'none', color: '#B91C1C', cursor: 'pointer', fontSize: '20px', padding: '0 4px' }}
@@ -282,124 +272,24 @@ const SymptomTracker = () => {
   const ConnectionStatus = () => (
     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
       <span style={{ fontSize: '16px' }}>
-        {connectionStatus === 'connected' ? '📶' : 
+        {connectionStatus === 'connected' ? '📶' :
          connectionStatus === 'offline' ? '📵' : '🔄'}
       </span>
-      <span style={{ fontSize: '14px', color: 
-        connectionStatus === 'connected' ? '#10B981' : 
-        connectionStatus === 'offline' ? '#EF4444' : '#F59E0B' 
+      <span style={{
+        fontSize: '14px',
+        color: connectionStatus === 'connected' ? '#10B981' :
+               connectionStatus === 'offline' ? '#EF4444' : '#F59E0B'
       }}>
-        {connectionStatus === 'connected' ? '온라인 - 클라우드 동기화 활성' : 
+        {connectionStatus === 'connected' ? '온라인 - 클라우드 동기화 활성' :
          connectionStatus === 'offline' ? '오프라인 - 연결 실패' : '연결 확인 중...'}
       </span>
     </div>
   );
 
-  // 사용자 설정 화면
-  if (showUserSetup) {
-    return (
-      <div className="st" style={{ 
-        maxWidth: '400px', 
-        margin: '0 auto', 
-        padding: '24px', 
-        backgroundColor: 'white', 
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center'
-      }}>
-        <ErrorDisplay />
-        
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: '#111827', marginBottom: '8px' }}>
-            증상 기록 앱
-          </h1>
-          <p style={{ color: '#6B7280', fontSize: '16px' }}>
-            개인별 기록 관리를 위해 사용자 이름을 입력해주세요
-          </p>
-          <div style={{ marginTop: '12px' }}>
-            <ConnectionStatus />
-          </div>
-        </div>
-
-        <div style={{ marginBottom: '24px' }}>
-          <label style={{ 
-            display: 'block', 
-            fontSize: '18px', 
-            fontWeight: '500', 
-            marginBottom: '8px',
-            color: '#374151'
-          }}>
-            사용자 이름
-          </label>
-          <input
-            type="text"
-            value={tempUserName}
-            onChange={(e) => setTempUserName(e.target.value)}
-            placeholder="예: 김아버지, 김철수 등"
-            className="input"
-            style={{ 
-              width: '100%', 
-              padding: '16px', 
-              border: '2px solid #D1D5DB', 
-              borderRadius: '8px', 
-              fontSize: '18px',
-              outline: 'none'
-            }}
-            onKeyDown={(e) => e.key === 'Enter' && handleUserSetup()}
-          />
-        </div>
-
-        <button
-          onClick={handleUserSetup}
-          disabled={!tempUserName.trim() || connectionStatus !== 'connected'}
-          className="btn primary cta"
-          style={{ 
-            width: '100%', 
-            padding: '16px 24px', 
-            backgroundColor: (tempUserName.trim() && connectionStatus === 'connected') ? '#3B82F6' : '#9CA3AF', 
-            color: 'white', 
-            border: 'none', 
-            borderRadius: '8px',
-            fontSize: '18px',
-            fontWeight: '600',
-            cursor: (tempUserName.trim() && connectionStatus === 'connected') ? 'pointer' : 'not-allowed'
-          }}
-        >
-          {connectionStatus === 'connected' ? '시작하기' : '데이터베이스 연결 대기 중...'}
-        </button>
-
-        <div style={{ 
-          marginTop: '32px', 
-          padding: '16px', 
-          backgroundColor: '#F3F4F6', 
-          borderRadius: '8px',
-          fontSize: '14px',
-          color: '#6B7280'
-        }}>
-          <p style={{ margin: 0, marginBottom: '8px' }}>💡 <strong>안내사항:</strong></p>
-          <ul style={{ margin: 0, paddingLeft: '16px' }}>
-            <li>입력한 이름으로 개인 기록이 구분됩니다</li>
-            <li>가족 구성원별로 다른 이름을 사용하세요</li>
-            <li>언제든지 사용자를 변경할 수 있습니다</li>
-            <li>데이터는 클라우드에 안전하게 저장됩니다</li>
-          </ul>
-        </div>
-
-        {/* 모바일 글로벌 스타일 */}
-        <style jsx global>{`
-          /* 아래 공통 글로벌 스타일은 파일 하단 공통 정의로도 들어가지만,
-             사용자 설정 화면 단독 렌더링 시에도 적용되도록 한 번 더 선언 */
-        `}</style>
-      </div>
-    );
-  }
-
-  // 간단 모드 폼
-  const simpleFormContent = useMemo(() => (
+  // ---------- render helpers (no hooks inside) ----------
+  const renderSimpleForm = () => (
     <div className="st" style={{ maxWidth: '480px', margin: '0 auto', padding: '16px', backgroundColor: 'white', minHeight: '100vh' }}>
       <ErrorDisplay />
-      
       <div style={{ marginBottom: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <h1 style={{ fontSize: '22px', fontWeight: 'bold', color: '#111827' }}>빠른 기록</h1>
@@ -411,11 +301,7 @@ const SymptomTracker = () => {
           <ConnectionStatus />
         </div>
         <div className="row-actions" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button
-            onClick={() => setShowForm(false)}
-            className="btn"
-            style={{ padding: '10px 16px', backgroundColor: '#6B7280', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-          >
+          <button onClick={() => setShowForm(false)} className="btn" style={{ padding: '10px 16px', backgroundColor: '#6B7280', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
             취소
           </button>
           <button
@@ -555,13 +441,11 @@ const SymptomTracker = () => {
         </button>
       </div>
     </div>
-  ), [currentRecord, userName, saving, handleInputChange, handleSubmit, error, connectionStatus]);
+  );
 
-  // 상세 모드 폼
-  const detailedFormContent = useMemo(() => (
+  const renderDetailedForm = () => (
     <div className="st" style={{ maxWidth: '800px', margin: '0 auto', padding: '16px', backgroundColor: 'white', minHeight: '100vh' }}>
       <ErrorDisplay />
-      
       <div style={{ marginBottom: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <h1 style={{ fontSize: '22px', fontWeight: 'bold', color: '#111827' }}>상세 증상 기록</h1>
@@ -573,11 +457,7 @@ const SymptomTracker = () => {
           <ConnectionStatus />
         </div>
         <div className="row-actions" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button
-            onClick={() => setShowForm(false)}
-            className="btn"
-            style={{ padding: '10px 16px', backgroundColor: '#6B7280', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-          >
+          <button onClick={() => setShowForm(false)} className="btn" style={{ padding: '10px 16px', backgroundColor: '#6B7280', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
             취소
           </button>
           <button
@@ -588,18 +468,15 @@ const SymptomTracker = () => {
           >
             {saving ? '저장 중...' : connectionStatus === 'connected' ? '저장' : '오프라인'}
           </button>
-          <button
-            onClick={() => setDetailMode(false)}
-            className="btn"
-            style={{ padding: '10px 12px', backgroundColor: '#10B981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}
-          >
+          <button onClick={() => setDetailMode(false)} className="btn" style={{ padding: '10px 12px', backgroundColor: '#10B981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}>
             간단모드
           </button>
         </div>
       </div>
 
+      {/* 이하 섹션은 기존과 동일한 필드/스타일. 길어서 생략 없이 유지 */}
+      {/* ① 시각·상황 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        {/* ① 시각·상황 */}
         <div style={{ backgroundColor: '#EBF8FF', padding: '12px', borderRadius: '10px' }}>
           <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px', color: '#1E40AF' }}>① 시각·상황</h2>
           <div className="grid-auto">
@@ -1023,9 +900,60 @@ const SymptomTracker = () => {
         </button>
       </div>
     </div>
-  ), [currentRecord, userName, saving, handleInputChange, handleSubmit, error, connectionStatus]);
+  );
 
-  if (showForm) return detailMode ? detailedFormContent : simpleFormContent;
+  // ---------- conditional returns (no hooks below here) ----------
+  if (showUserSetup) {
+    return (
+      <div className="st" style={{
+        maxWidth: '400px', margin: '0 auto', padding: '24px', backgroundColor: 'white',
+        minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center'
+      }}>
+        <ErrorDisplay />
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: '#111827', marginBottom: '8px' }}>증상 기록 앱</h1>
+          <p style={{ color: '#6B7280', fontSize: '16px' }}>개인별 기록 관리를 위해 사용자 이름을 입력해주세요</p>
+          <div style={{ marginTop: '12px' }}>
+            <ConnectionStatus />
+          </div>
+        </div>
+        <div style={{ marginBottom: '24px' }}>
+          <label style={{ display: 'block', fontSize: '18px', fontWeight: '500', marginBottom: '8px', color: '#374151' }}>
+            사용자 이름
+          </label>
+          <input
+            type="text"
+            value={tempUserName}
+            onChange={(e) => setTempUserName(e.target.value)}
+            placeholder="예: 김아버지, 김철수 등"
+            className="input"
+            style={{ width: '100%', padding: '16px', border: '2px solid #D1D5DB', borderRadius: '8px', fontSize: '18px', outline: 'none' }}
+            onKeyDown={(e) => e.key === 'Enter' && handleUserSetup()}
+          />
+        </div>
+        <button
+          onClick={handleUserSetup}
+          disabled={!tempUserName.trim() || connectionStatus !== 'connected'}
+          className="btn primary cta"
+          style={{ width: '100%', padding: '16px 24px', backgroundColor: (tempUserName.trim() && connectionStatus === 'connected') ? '#3B82F6' : '#9CA3AF', color: 'white', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: '600', cursor: (tempUserName.trim() && connectionStatus === 'connected') ? 'pointer' : 'not-allowed' }}
+        >
+          {connectionStatus === 'connected' ? '시작하기' : '데이터베이스 연결 대기 중...'}
+        </button>
+        <div style={{ marginTop: '32px', padding: '16px', backgroundColor: '#F3F4F6', borderRadius: '8px', fontSize: '14px', color: '#6B7280' }}>
+          <p style={{ margin: 0, marginBottom: '8px' }}>💡 <strong>안내사항:</strong></p>
+          <ul style={{ margin: 0, paddingLeft: '16px' }}>
+            <li>입력한 이름으로 개인 기록이 구분됩니다</li>
+            <li>가족 구성원별로 다른 이름을 사용하세요</li>
+            <li>언제든지 사용자를 변경할 수 있습니다</li>
+            <li>데이터는 클라우드에 안전하게 저장됩니다</li>
+          </ul>
+        </div>
+
+        {/* 모바일 글로벌 스타일(중복 선언 허용) */}
+        <style jsx global>{``}</style>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -1038,10 +966,13 @@ const SymptomTracker = () => {
     );
   }
 
+  if (showForm) {
+    return detailMode ? renderDetailedForm() : renderSimpleForm();
+  }
+
   return (
     <div className="st" style={{ maxWidth: '1024px', margin: '0 auto', padding: '16px', backgroundColor: 'white', minHeight: '100vh' }}>
       <ErrorDisplay />
-      
       <div style={{ marginBottom: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <h1 style={{ fontSize: '26px', fontWeight: 'bold', color: '#111827' }}>증상 기록 관리</h1>
@@ -1049,11 +980,7 @@ const SymptomTracker = () => {
             <span className="chip" style={{ fontSize: '14px', color: '#6B7280', backgroundColor: '#F3F4F6', padding: '6px 12px', borderRadius: '16px' }}>
               👤 {userName}
             </span>
-            <button
-              onClick={changeUser}
-              className="btn"
-              style={{ fontSize: '12px', padding: '8px 10px', backgroundColor: '#EF4444', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-            >
+            <button onClick={changeUser} className="btn" style={{ fontSize: '12px', padding: '8px 10px', backgroundColor: '#EF4444', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
               사용자 변경
             </button>
           </div>
@@ -1135,13 +1062,11 @@ const SymptomTracker = () => {
                   🗑️
                 </button>
               </div>
-              
               <div className="grid-auto small" style={{ gap: '10px', fontSize: '14px' }}>
                 <div><span style={{ fontWeight: '500' }}>지속시간:</span> {record.duration ? `${record.duration}분` : '기록 없음'}</div>
                 <div><span style={{ fontWeight: '500' }}>두근거림:</span> {record.heart_rate ? `${record.heart_rate}/10` : '기록 없음'}</div>
                 <div><span style={{ fontWeight: '500' }}>혈압:</span> {record.blood_pressure || '기록 없음'}</div>
               </div>
-              
               {record.notes && (
                 <div style={{ marginTop: '8px', fontSize: '14px', backgroundColor: 'white', padding: '8px', borderRadius: '8px' }}>
                   <span style={{ fontWeight: '500' }}>메모:</span> {record.notes}
@@ -1152,63 +1077,21 @@ const SymptomTracker = () => {
         )}
       </div>
 
-      {/* 모바일 최적화 글로벌 스타일 */}
+      {/* 모바일 글로벌 스타일 */}
       <style jsx global>{`
-        /* 기본: 시스템 폰트 & 터치 피드백 */
-        .st {
-          -webkit-tap-highlight-color: transparent;
-          padding-bottom: env(safe-area-inset-bottom);
-        }
+        .st { -webkit-tap-highlight-color: transparent; padding-bottom: env(safe-area-inset-bottom); }
         .btn, .input, select, textarea {
           font-family: system-ui, -apple-system, Segoe UI, Roboto, Apple SD Gothic Neo, 'Noto Sans KR', sans-serif;
         }
-
-        /* iOS 자동 확대 방지: 입력 글자 크기 16px 이상 */
-        input, select, textarea {
-          font-size: 16px !important;
-          min-height: 44px;
-        }
-        .btn {
-          min-height: 44px;
-          line-height: 1.2;
-        }
-
-        /* 그리드 유틸 */
-        .grid-2 {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
-        }
-        .grid-auto {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-          gap: 12px;
-        }
-        .grid-auto.small {
-          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-        }
-
-        /* 하단 고정 CTA (모바일) */
-        .footer-cta {
-          position: sticky;
-          bottom: 12px;
-          z-index: 20;
-          margin-top: 24px;
-          background: linear-gradient(180deg, transparent, rgba(255,255,255,0.9) 40%);
-          padding: 8px 0 0;
-        }
-
-        /* 터치 영역 향상 */
-        .btn-ghost {
-          min-height: 44px;
-        }
-
-        /* 칩 */
-        .chip {
-          white-space: nowrap;
-        }
-
-        /* 작은 화면 전용 조정 */
+        input, select, textarea { font-size: 16px !important; min-height: 44px; }
+        .btn { min-height: 44px; line-height: 1.2; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .grid-auto { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+        .grid-auto.small { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+        .footer-cta { position: sticky; bottom: 12px; z-index: 20; margin-top: 24px;
+          background: linear-gradient(180deg, transparent, rgba(255,255,255,0.9) 40%); padding: 8px 0 0; }
+        .btn-ghost { min-height: 44px; }
+        .chip { white-space: nowrap; }
         @media (max-width: 480px) {
           .st { padding-left: 12px !important; padding-right: 12px !important; }
           h1 { font-size: 22px !important; }
