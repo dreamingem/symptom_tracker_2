@@ -675,6 +675,42 @@ const SymptomTracker = () => {
               </select>
             </div>
             <div>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>식은땀 위치 및 양</label>
+              <input
+                type="text"
+                value={currentRecord.sweating}
+                onChange={(e) => handleInputChange('sweating', e.target.value)}
+                placeholder="이마, 등, 손바닥 등"
+                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>호흡 곤란 정도 (1-10)</label>
+              <select
+                value={currentRecord.breathing}
+                onChange={(e) => handleInputChange('breathing', e.target.value)}
+                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
+              >
+                <option value="">선택하세요</option>
+                {[1,2,3,4,5,6,7,8,9,10].map(num => (
+                  <option key={num} value={num}>{num}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>어지럼/중심잡기 어려움 (1-10)</label>
+              <select
+                value={currentRecord.dizziness}
+                onChange={(e) => handleInputChange('dizziness', e.target.value)}
+                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
+              >
+                <option value="">선택하세요</option>
+                {[1,2,3,4,5,6,7,8,9,10].map(num => (
+                  <option key={num} value={num}>{num}</option>
+                ))}
+              </select>
+            </div>
+            <div>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>근육 힘 빠짐 정도</label>
               <select
                 value={currentRecord.weakness}
@@ -1108,40 +1144,4 @@ const SymptomTracker = () => {
   );
 };
 
-export default SymptomTracker;,10].map(num => (
-                  <option key={num} value={num}>{num}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>식은땀 위치 및 양</label>
-              <input
-                type="text"
-                value={currentRecord.sweating}
-                onChange={(e) => handleInputChange('sweating', e.target.value)}
-                placeholder="이마, 등, 손바닥 등"
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>호흡 곤란 정도 (1-10)</label>
-              <select
-                value={currentRecord.breathing}
-                onChange={(e) => handleInputChange('breathing', e.target.value)}
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              >
-                <option value="">선택하세요</option>
-                {[1,2,3,4,5,6,7,8,9,10].map(num => (
-                  <option key={num} value={num}>{num}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>어지럼/중심잡기 어려움 (1-10)</label>
-              <select
-                value={currentRecord.dizziness}
-                onChange={(e) => handleInputChange('dizziness', e.target.value)}
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              >
-                <option value="">선택하세요</option>
-                {[1,2,3,4,5,6,7,8,9
+export default SymptomTracker;
