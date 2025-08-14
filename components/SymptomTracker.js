@@ -15,20 +15,20 @@ const SymptomTracker = () => {
     start_feeling: '',
     start_type: '',
     premonition: '',
-    heart_rate: '',
+    heart_rate: null,  // 빈 문자열 대신 null 사용
     sweating: '',
-    breathing: '',
-    dizziness: '',
+    breathing: null,
+    dizziness: null,
     weakness: '',
-    speech_difficulty: '',
+    speech_difficulty: null,
     chest_pain: '',
-    measured_heart_rate: '',
+    measured_heart_rate: null,
     ecg_taken: false,
     blood_pressure: '',
     blood_sugar: '',
-    duration: '',
+    duration: null,
     after_effects: '',
-    recovery_heart_rate: '',
+    recovery_heart_rate: null,
     recovery_blood_pressure: '',
     recovery_actions: '',
     recovery_helpful: '',
@@ -42,40 +42,145 @@ const SymptomTracker = () => {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [detailMode, setDetailMode] = useState(false);
+  const [error, setError] = useState(null);
+  const [connectionStatus, setConnectionStatus] = useState('testing');
 
-  // 사용자 이름 확인 및 설정
-  useEffect(() => {
-    const savedUserName = localStorage.getItem('symptom_tracker_user');
-    if (savedUserName) {
-      setUserName(savedUserName);
-      loadRecords(savedUserName);
-    } else {
-      setShowUserSetup(true);
-      setLoading(false);
+  // 데이터 정제 함수 - 빈 문자열을 null로 변환
+  const sanitizeRecord = (record) => {
+    const sanitized = { ...record };
+    
+    // 정수 필드들 - 빈 문자열이면 null로 변환
+    const integerFields = [
+      'heart_rate', 
+      'breathing', 
+      'dizziness', 
+      'speech_difficulty', 
+      'measured_heart_rate', 
+      'duration', 
+      'recovery_heart_rate'
+    ];
+    
+    integerFields.forEach(field => {
+      if (sanitized[field] === '' || sanitized[field] === undefined) {
+        sanitized[field] = null;
+      } else if (sanitized[field] !== null) {
+        // 숫자로 변환 시도
+        const num = parseInt(sanitized[field], 10);
+        sanitized[field] = isNaN(num) ? null : num;
+      }
+    });
+
+    // 불린 필드
+    if (typeof sanitized.ecg_taken !== 'boolean') {
+      sanitized.ecg_taken = sanitized.ecg_taken === 'true' || sanitized.ecg_taken === true;
+    }
+
+    // 문자열 필드들 - null이면 빈 문자열로 변환
+    const stringFields = [
+      'activity', 'body_part', 'intake', 'start_feeling', 'start_type', 
+      'premonition', 'sweating', 'weakness', 'chest_pain', 'blood_pressure', 
+      'blood_sugar', 'after_effects', 'recovery_blood_pressure', 'recovery_actions', 
+      'recovery_helpful', 'sleep_hours', 'stress', 'medications', 'notes'
+    ];
+    
+    stringFields.forEach(field => {
+      if (sanitized[field] === null || sanitized[field] === undefined) {
+        sanitized[field] = '';
+      }
+    });
+
+    return sanitized;
+  };
+
+  // Supabase 연결 테스트
+  const testSupabaseConnection = useCallback(async () => {
+    try {
+      console.log('Supabase 연결 테스트 시작...');
+      
+      const { data, error } = await supabase
+        .from('symptoms')
+        .select('count')
+        .limit(1);
+
+      if (error) {
+        console.error('Supabase 연결 오류:', error);
+        setConnectionStatus('offline');
+        setError(`데이터베이스 연결 실패: ${error.message}`);
+        return false;
+      }
+
+      console.log('Supabase 연결 성공');
+      setConnectionStatus('connected');
+      setError(null);
+      return true;
+    } catch (err) {
+      console.error('Supabase 연결 예외:', err);
+      setConnectionStatus('offline');
+      setError(`연결 오류: ${err.message}`);
+      return false;
     }
   }, []);
 
-  const handleUserSetup = useCallback(() => {
-    if (tempUserName.trim()) {
-      const finalUserName = tempUserName.trim();
-      setUserName(finalUserName);
-      localStorage.setItem('symptom_tracker_user', finalUserName);
-      setShowUserSetup(false);
-      loadRecords(finalUserName);
+  // 초기 설정
+  useEffect(() => {
+    const initialize = async () => {
+      try {
+        await testSupabaseConnection();
+        const savedUserName = localStorage.getItem('symptom_tracker_user');
+        if (savedUserName) {
+          setUserName(savedUserName);
+          await loadRecords(savedUserName);
+        } else {
+          setShowUserSetup(true);
+        }
+      } catch (error) {
+        console.error('초기화 오류:', error);
+        setError(`초기화 실패: ${error.message}`);
+        setShowUserSetup(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initialize();
+  }, [testSupabaseConnection]);
+
+  const handleUserSetup = useCallback(async () => {
+    try {
+      if (tempUserName.trim()) {
+        const finalUserName = tempUserName.trim();
+        setUserName(finalUserName);
+        localStorage.setItem('symptom_tracker_user', finalUserName);
+        setShowUserSetup(false);
+        await loadRecords(finalUserName);
+      }
+    } catch (error) {
+      console.error('사용자 설정 오류:', error);
+      setError(`사용자 설정 실패: ${error.message}`);
     }
   }, [tempUserName]);
 
   const changeUser = useCallback(() => {
-    localStorage.removeItem('symptom_tracker_user');
-    setUserName('');
-    setTempUserName('');
-    setRecords([]);
-    setShowUserSetup(true);
+    try {
+      localStorage.removeItem('symptom_tracker_user');
+      setUserName('');
+      setTempUserName('');
+      setRecords([]);
+      setShowUserSetup(true);
+      setError(null);
+    } catch (error) {
+      console.error('사용자 변경 오류:', error);
+      setError(`사용자 변경 실패: ${error.message}`);
+    }
   }, []);
 
   const loadRecords = async (user) => {
     setLoading(true);
+    setError(null);
+
     try {
+      console.log(`사용자 ${user}의 기록 로드 중...`);
+
       const { data, error } = await supabase
         .from('symptoms')
         .select('*')
@@ -83,53 +188,80 @@ const SymptomTracker = () => {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('데이터 로드 실패:', error);
+        console.error('데이터 로드 오류:', error);
+        throw new Error(`데이터 로드 실패: ${error.message}`);
+      }
+
+      console.log(`${data?.length || 0}개의 기록을 로드했습니다.`);
+      setRecords(data || []);
+      localStorage.setItem(`symptomRecords_${user}`, JSON.stringify(data || []));
+      
+    } catch (error) {
+      console.error('데이터 로드 실패:', error);
+      setError(error.message);
+      
+      try {
         const localData = localStorage.getItem(`symptomRecords_${user}`);
         if (localData) {
-          setRecords(JSON.parse(localData));
+          const parsedData = JSON.parse(localData);
+          setRecords(parsedData);
+          console.log('로컬 백업에서 데이터 복구됨');
         }
-      } else {
-        setRecords(data || []);
-        localStorage.setItem(`symptomRecords_${user}`, JSON.stringify(data || []));
+      } catch (localError) {
+        console.error('로컬 데이터 복구 실패:', localError);
       }
-    } catch (error) {
-      console.error('네트워크 오류:', error);
-      const localData = localStorage.getItem(`symptomRecords_${user}`);
-      if (localData) {
-        setRecords(JSON.parse(localData));
-      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const saveToSupabase = async (record) => {
-    const recordWithUser = { ...record, user_name: userName };
+    console.log('저장 전 원본 데이터:', record);
+    
+    // 데이터 정제
+    const sanitizedRecord = sanitizeRecord(record);
+    
+    const recordWithUser = { 
+      ...sanitizedRecord, 
+      user_name: userName,
+      created_at: new Date().toISOString()
+    };
+
+    console.log('Supabase에 저장할 정제된 데이터:', recordWithUser);
+
     const { data, error } = await supabase
       .from('symptoms')
       .insert([recordWithUser])
       .select();
 
     if (error) {
-      throw error;
+      console.error('Supabase 저장 오류:', error);
+      throw new Error(`저장 실패: ${error.message}`);
     }
+
+    console.log('Supabase 저장 성공:', data[0]);
     return data[0];
   };
 
   const handleSubmit = useCallback(async () => {
     setSaving(true);
-    
-    const newRecord = {
-      ...currentRecord,
-      created_at: new Date().toISOString()
-    };
+    setError(null);
 
     try {
-      const savedRecord = await saveToSupabase(newRecord);
+      console.log('데이터 저장 시작...');
+
+      if (!currentRecord.date || !currentRecord.time) {
+        throw new Error('날짜와 시간은 필수입니다.');
+      }
+
+      const savedRecord = await saveToSupabase(currentRecord);
+      
       setRecords(prev => [savedRecord, ...prev]);
       
       const updatedRecords = [savedRecord, ...records];
       localStorage.setItem(`symptomRecords_${userName}`, JSON.stringify(updatedRecords));
 
+      // 폼 초기화 (null과 빈 문자열 구분)
       setCurrentRecord({
         date: new Date().toISOString().split('T')[0],
         time: new Date().toTimeString().slice(0, 5),
@@ -139,20 +271,20 @@ const SymptomTracker = () => {
         start_feeling: '',
         start_type: '',
         premonition: '',
-        heart_rate: '',
+        heart_rate: null,
         sweating: '',
-        breathing: '',
-        dizziness: '',
+        breathing: null,
+        dizziness: null,
         weakness: '',
-        speech_difficulty: '',
+        speech_difficulty: null,
         chest_pain: '',
-        measured_heart_rate: '',
+        measured_heart_rate: null,
         ecg_taken: false,
         blood_pressure: '',
         blood_sugar: '',
-        duration: '',
+        duration: null,
         after_effects: '',
-        recovery_heart_rate: '',
+        recovery_heart_rate: null,
         recovery_blood_pressure: '',
         recovery_actions: '',
         recovery_helpful: '',
@@ -161,21 +293,40 @@ const SymptomTracker = () => {
         medications: '',
         notes: ''
       });
-      
+
       setShowForm(false);
+      console.log('저장 완료!');
+      
     } catch (error) {
       console.error('저장 실패:', error);
-      alert('저장에 실패했습니다. 다시 시도해주세요.');
+      setError(error.message);
+    } finally {
+      setSaving(false);
     }
-    
-    setSaving(false);
   }, [currentRecord, records, userName]);
 
-  // 핵심: handleInputChange를 완전히 안정화
+  // 입력 변경 핸들러 - 숫자 필드 처리 개선
   const handleInputChange = useCallback((field, value) => {
+    const integerFields = [
+      'heart_rate', 'breathing', 'dizziness', 'speech_difficulty', 
+      'measured_heart_rate', 'duration', 'recovery_heart_rate'
+    ];
+
+    let processedValue = value;
+
+    if (integerFields.includes(field)) {
+      // 숫자 필드의 경우
+      if (value === '' || value === null || value === undefined) {
+        processedValue = null;
+      } else {
+        const num = parseInt(value, 10);
+        processedValue = isNaN(num) ? null : num;
+      }
+    }
+
     setCurrentRecord(prev => ({
       ...prev,
-      [field]: value
+      [field]: processedValue
     }));
   }, []);
 
@@ -183,15 +334,76 @@ const SymptomTracker = () => {
     if (!confirm('정말 삭제하시겠습니까?')) return;
 
     try {
-      await supabase.from('symptoms').delete().eq('id', id);
+      console.log('기록 삭제 중:', id);
+      
+      const { error } = await supabase
+        .from('symptoms')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        throw new Error(`삭제 실패: ${error.message}`);
+      }
+
       const updatedRecords = records.filter(record => record.id !== id);
       setRecords(updatedRecords);
       localStorage.setItem(`symptomRecords_${userName}`, JSON.stringify(updatedRecords));
+      
+      console.log('삭제 완료');
     } catch (error) {
-      console.error('삭제 실패:', error);
-      alert('삭제에 실패했습니다.');
+      console.error('삭제 오류:', error);
+      setError(error.message);
     }
   };
+
+  // 에러 표시 컴포넌트
+  const ErrorDisplay = () => error && (
+    <div style={{ 
+      backgroundColor: '#FEF2F2', 
+      border: '1px solid #FECACA', 
+      borderRadius: '8px', 
+      padding: '16px', 
+      marginBottom: '16px',
+      color: '#B91C1C'
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>⚠️ 오류 발생</div>
+          <div style={{ fontSize: '14px', marginBottom: '12px' }}>{error}</div>
+        </div>
+        <button 
+          onClick={() => setError(null)}
+          style={{ 
+            background: 'none', 
+            border: 'none', 
+            color: '#B91C1C', 
+            cursor: 'pointer',
+            fontSize: '20px',
+            padding: '0 4px'
+          }}
+        >
+          ×
+        </button>
+      </div>
+    </div>
+  );
+
+  // 연결 상태 표시
+  const ConnectionStatus = () => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+      <span style={{ fontSize: '16px' }}>
+        {connectionStatus === 'connected' ? '📶' : 
+         connectionStatus === 'offline' ? '📵' : '🔄'}
+      </span>
+      <span style={{ fontSize: '14px', color: 
+        connectionStatus === 'connected' ? '#10B981' : 
+        connectionStatus === 'offline' ? '#EF4444' : '#F59E0B' 
+      }}>
+        {connectionStatus === 'connected' ? '온라인 - 클라우드 동기화 활성' : 
+         connectionStatus === 'offline' ? '오프라인 - 연결 실패' : '연결 확인 중...'}
+      </span>
+    </div>
+  );
 
   // 사용자 설정 화면
   if (showUserSetup) {
@@ -206,6 +418,8 @@ const SymptomTracker = () => {
         flexDirection: 'column',
         justifyContent: 'center'
       }}>
+        <ErrorDisplay />
+        
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: '#111827', marginBottom: '8px' }}>
             증상 기록 앱
@@ -213,6 +427,10 @@ const SymptomTracker = () => {
           <p style={{ color: '#6B7280', fontSize: '16px' }}>
             개인별 기록 관리를 위해 사용자 이름을 입력해주세요
           </p>
+          
+          <div style={{ marginTop: '12px' }}>
+            <ConnectionStatus />
+          </div>
         </div>
 
         <div style={{ marginBottom: '24px' }}>
@@ -244,20 +462,20 @@ const SymptomTracker = () => {
 
         <button
           onClick={handleUserSetup}
-          disabled={!tempUserName.trim()}
+          disabled={!tempUserName.trim() || connectionStatus !== 'connected'}
           style={{ 
             width: '100%', 
             padding: '16px 24px', 
-            backgroundColor: tempUserName.trim() ? '#3B82F6' : '#9CA3AF', 
+            backgroundColor: (tempUserName.trim() && connectionStatus === 'connected') ? '#3B82F6' : '#9CA3AF', 
             color: 'white', 
             border: 'none', 
             borderRadius: '8px',
             fontSize: '18px',
             fontWeight: '600',
-            cursor: tempUserName.trim() ? 'pointer' : 'not-allowed'
+            cursor: (tempUserName.trim() && connectionStatus === 'connected') ? 'pointer' : 'not-allowed'
           }}
         >
-          시작하기
+          {connectionStatus === 'connected' ? '시작하기' : '데이터베이스 연결 대기 중...'}
         </button>
 
         <div style={{ 
@@ -273,15 +491,18 @@ const SymptomTracker = () => {
             <li>입력한 이름으로 개인 기록이 구분됩니다</li>
             <li>가족 구성원별로 다른 이름을 사용하세요</li>
             <li>언제든지 사용자를 변경할 수 있습니다</li>
+            <li>데이터는 클라우드에 안전하게 저장됩니다</li>
           </ul>
         </div>
       </div>
     );
   }
 
-  // 간단 모드 폼 - 컴포넌트를 외부로 분리하지 않고 직접 렌더링
+  // 간단 모드 폼
   const simpleFormContent = useMemo(() => (
     <div style={{ maxWidth: '400px', margin: '0 auto', padding: '24px', backgroundColor: 'white', minHeight: '100vh' }}>
+      <ErrorDisplay />
+      
       <div style={{ marginBottom: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#111827' }}>빠른 기록</h1>
@@ -294,6 +515,9 @@ const SymptomTracker = () => {
           }}>
             👤 {userName}
           </span>
+        </div>
+        <div style={{ marginBottom: '8px' }}>
+          <ConnectionStatus />
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <button
@@ -311,18 +535,18 @@ const SymptomTracker = () => {
           </button>
           <button
             onClick={handleSubmit}
-            disabled={saving}
+            disabled={saving || connectionStatus !== 'connected'}
             style={{ 
               padding: '8px 16px', 
-              backgroundColor: '#3B82F6', 
+              backgroundColor: connectionStatus === 'connected' ? '#3B82F6' : '#9CA3AF', 
               color: 'white', 
               border: 'none', 
               borderRadius: '4px',
-              cursor: 'pointer',
+              cursor: (saving || connectionStatus !== 'connected') ? 'not-allowed' : 'pointer',
               opacity: saving ? 0.5 : 1
             }}
           >
-            {saving ? '저장 중...' : '저장'}
+            {saving ? '저장 중...' : connectionStatus === 'connected' ? '저장' : '오프라인'}
           </button>
           <button
             onClick={() => setDetailMode(true)}
@@ -406,7 +630,7 @@ const SymptomTracker = () => {
           <label style={{ display: 'block', fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>두근거림 정도</label>
           <select
             key="heart-rate-select"
-            value={currentRecord.heart_rate}
+            value={currentRecord.heart_rate || ''}
             onChange={(e) => handleInputChange('heart_rate', e.target.value)}
             style={{ 
               width: '100%', 
@@ -429,7 +653,7 @@ const SymptomTracker = () => {
           <label style={{ display: 'block', fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>지속 시간</label>
           <select
             key="duration-select"
-            value={currentRecord.duration}
+            value={currentRecord.duration || ''}
             onChange={(e) => handleInputChange('duration', e.target.value)}
             style={{ 
               width: '100%', 
@@ -489,246 +713,34 @@ const SymptomTracker = () => {
       <div style={{ marginTop: '32px', textAlign: 'center' }}>
         <button
           onClick={handleSubmit}
-          disabled={saving}
+          disabled={saving || connectionStatus !== 'connected'}
           style={{ 
             width: '100%', 
             padding: '16px 24px', 
-            backgroundColor: '#3B82F6', 
+            backgroundColor: connectionStatus === 'connected' ? '#3B82F6' : '#9CA3AF', 
             color: 'white', 
             border: 'none', 
             borderRadius: '8px',
             fontSize: '20px',
-            cursor: 'pointer',
+            cursor: (saving || connectionStatus !== 'connected') ? 'not-allowed' : 'pointer',
             opacity: saving ? 0.5 : 1
           }}
         >
-          {saving ? '저장 중...' : '저장하기'}
+          {saving ? '저장 중...' : connectionStatus === 'connected' ? '저장하기' : '오프라인'}
         </button>
       </div>
     </div>
-  ), [currentRecord, userName, saving, handleInputChange, handleSubmit]);
-
-  // 상세 모드 폼
-  const detailedFormContent = useMemo(() => (
-    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '24px', backgroundColor: 'white', minHeight: '100vh' }}>
-      <div style={{ marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#111827' }}>상세 증상 기록</h1>
-          <span style={{ 
-            fontSize: '14px', 
-            color: '#6B7280',
-            backgroundColor: '#F3F4F6',
-            padding: '4px 8px',
-            borderRadius: '12px'
-          }}>
-            👤 {userName}
-          </span>
-        </div>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button
-            onClick={() => setShowForm(false)}
-            style={{ 
-              padding: '8px 16px', 
-              backgroundColor: '#6B7280', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '4px',
-              cursor: 'pointer'
-            }}
-          >
-            취소
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={saving}
-            style={{ 
-              padding: '8px 16px', 
-              backgroundColor: '#3B82F6', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '4px',
-              cursor: 'pointer',
-              opacity: saving ? 0.5 : 1
-            }}
-          >
-            {saving ? '저장 중...' : '저장'}
-          </button>
-          <button
-            onClick={() => setDetailMode(false)}
-            style={{ 
-              padding: '8px 12px', 
-              backgroundColor: '#10B981', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            간단모드
-          </button>
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        {/* ① 시각·상황 */}
-        <div style={{ backgroundColor: '#EBF8FF', padding: '16px', borderRadius: '8px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px', color: '#1E40AF' }}>① 시각·상황</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>날짜</label>
-              <input
-                key="detail-date-input"
-                type="date"
-                value={currentRecord.date}
-                onChange={(e) => handleInputChange('date', e.target.value)}
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>시간</label>
-              <input
-                key="detail-time-input"
-                type="time"
-                value={currentRecord.time}
-                onChange={(e) => handleInputChange('time', e.target.value)}
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>당시 하고 있던 일</label>
-              <input
-                key="detail-activity-input"
-                type="text"
-                value={currentRecord.activity}
-                onChange={(e) => handleInputChange('activity', e.target.value)}
-                placeholder="집중 작업, 대화, 운동, 식사, 커피 등"
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>많이 사용한 신체 부위</label>
-              <input
-                key="detail-body-part-input"
-                type="text"
-                value={currentRecord.body_part}
-                onChange={(e) => handleInputChange('body_part', e.target.value)}
-                placeholder="어깨 근육, 거북목, 구부정한 자세 등"
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>1시간 내 섭취한 음식·음료</label>
-              <input
-                key="detail-intake-input"
-                type="text"
-                value={currentRecord.intake}
-                onChange={(e) => handleInputChange('intake', e.target.value)}
-                placeholder="특히 카페인·알코올"
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* ② 증상 시작 */}
-        <div style={{ backgroundColor: '#FEF3C7', padding: '16px', borderRadius: '8px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px', color: '#92400E' }}>② 증상 시작</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>증상 시작 순간의 느낌</label>
-              <input
-                key="detail-start-feeling-input"
-                type="text"
-                value={currentRecord.start_feeling}
-                onChange={(e) => handleInputChange('start_feeling', e.target.value)}
-                placeholder="심장이 갑자기 빨라짐, 몸이 붕 뜨는 느낌, 땅으로 꺼지는 느낌"
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>시작 양상</label>
-              <select
-                key="detail-start-type-select"
-                value={currentRecord.start_type}
-                onChange={(e) => handleInputChange('start_type', e.target.value)}
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              >
-                <option value="">선택하세요</option>
-                <option value="갑작스러움">갑작스러움</option>
-                <option value="서서히">서서히</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>전조 증상</label>
-              <input
-                key="detail-premonition-input"
-                type="text"
-                value={currentRecord.premonition}
-                onChange={(e) => handleInputChange('premonition', e.target.value)}
-                placeholder="두통, 흉부 압박감, 시야 흐림 등"
-                style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* 추가 메모 섹션 */}
-        <div style={{ backgroundColor: '#F9FAFB', padding: '16px', borderRadius: '8px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px', color: '#374151' }}>⑥ 기타 참고</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>추가 메모</label>
-              <textarea
-                key="detail-notes-textarea"
-                value={currentRecord.notes}
-                onChange={(e) => handleInputChange('notes', e.target.value)}
-                placeholder="기타 특이사항이나 중요하다고 생각되는 내용"
-                style={{ 
-                  width: '100%', 
-                  padding: '8px', 
-                  border: '1px solid #D1D5DB', 
-                  borderRadius: '4px',
-                  height: '80px',
-                  resize: 'vertical'
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ marginTop: '32px', textAlign: 'center' }}>
-        <button
-          onClick={handleSubmit}
-          disabled={saving}
-          style={{ 
-            padding: '16px 32px', 
-            backgroundColor: '#3B82F6', 
-            color: 'white', 
-            border: 'none', 
-            borderRadius: '8px',
-            fontSize: '18px',
-            fontWeight: '600',
-            cursor: 'pointer',
-            opacity: saving ? 0.5 : 1
-          }}
-        >
-          {saving ? '저장 중...' : '기록 저장'}
-        </button>
-      </div>
-    </div>
-  ), [currentRecord, userName, saving, handleInputChange, handleSubmit]);
+  ), [currentRecord, userName, saving, handleInputChange, handleSubmit, error, connectionStatus]);
 
   if (showForm) {
-    return detailMode ? detailedFormContent : simpleFormContent;
+    return simpleFormContent;
   }
 
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px', animation: 'spin 2s linear infinite' }}>⟳</div>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⟳</div>
           <p style={{ fontSize: '18px' }}>데이터를 불러오는 중...</p>
         </div>
       </div>
@@ -737,6 +749,8 @@ const SymptomTracker = () => {
 
   return (
     <div style={{ maxWidth: '1024px', margin: '0 auto', padding: '24px', backgroundColor: 'white', minHeight: '100vh' }}>
+      <ErrorDisplay />
+      
       <div style={{ marginBottom: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <h1 style={{ fontSize: '30px', fontWeight: 'bold', color: '#111827' }}>증상 기록 관리</h1>
@@ -769,10 +783,7 @@ const SymptomTracker = () => {
         <p style={{ color: '#6B7280' }}>체계적인 증상 기록으로 패턴을 파악하고 의료진과 효과적으로 소통하세요.</p>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '12px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#10B981' }}>
-            <span style={{ fontSize: '16px' }}>📶</span>
-            <span style={{ fontSize: '14px' }}>온라인 - 클라우드 동기화 활성</span>
-          </div>
+          <ConnectionStatus />
         </div>
       </div>
 
@@ -782,18 +793,19 @@ const SymptomTracker = () => {
             setDetailMode(false);
             setShowForm(true);
           }}
+          disabled={connectionStatus !== 'connected'}
           style={{ 
             display: 'flex', 
             alignItems: 'center', 
             gap: '8px', 
             padding: '12px 24px', 
-            backgroundColor: '#3B82F6', 
+            backgroundColor: connectionStatus === 'connected' ? '#3B82F6' : '#9CA3AF', 
             color: 'white', 
             border: 'none', 
             borderRadius: '8px',
             fontSize: '18px',
             fontWeight: '500',
-            cursor: 'pointer'
+            cursor: connectionStatus === 'connected' ? 'pointer' : 'not-allowed'
           }}
         >
           <span style={{ fontSize: '20px' }}>+</span> 빠른 기록
@@ -803,21 +815,43 @@ const SymptomTracker = () => {
             setDetailMode(true);
             setShowForm(true);
           }}
+          disabled={connectionStatus !== 'connected'}
           style={{ 
             display: 'flex', 
             alignItems: 'center', 
             gap: '8px', 
             padding: '8px 16px', 
-            backgroundColor: '#10B981', 
+            backgroundColor: connectionStatus === 'connected' ? '#10B981' : '#9CA3AF', 
             color: 'white', 
             border: 'none', 
             borderRadius: '4px',
-            cursor: 'pointer'
+            cursor: connectionStatus === 'connected' ? 'pointer' : 'not-allowed'
           }}
         >
           📋 상세 기록
         </button>
       </div>
+
+      {/* 연결 상태 안내 */}
+      {connectionStatus !== 'connected' && (
+        <div style={{ 
+          background: 'linear-gradient(to right, #FEF3C7, #FDE68A)', 
+          padding: '16px', 
+          borderRadius: '8px', 
+          marginBottom: '24px',
+          border: '1px solid #F59E0B'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '24px' }}>⚠️</span>
+            <div>
+              <h3 style={{ fontWeight: '600', color: '#92400E', marginBottom: '4px' }}>데이터베이스 연결 필요</h3>
+              <p style={{ fontSize: '14px', color: '#78350F', margin: 0 }}>
+                새 기록을 저장하려면 데이터베이스 연결이 필요합니다. 인터넷 연결을 확인하고 페이지를 새로고침해주세요.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* PWA 설치 안내 */}
       <div style={{ 
@@ -858,27 +892,17 @@ const SymptomTracker = () => {
                 <div>
                   <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {record.date} {record.time}
-                    {record.synced === false && (
-                      <span style={{ 
-                        fontSize: '12px', 
-                        backgroundColor: '#FED7AA', 
-                        color: '#EA580C', 
-                        padding: '2px 8px', 
-                        borderRadius: '12px' 
-                      }}>
-                        동기화 대기
-                      </span>
-                    )}
                   </h3>
                   <p style={{ color: '#6B7280', margin: 0 }}>{record.activity}</p>
                 </div>
                 <button
                   onClick={() => deleteRecord(record.id)}
+                  disabled={connectionStatus !== 'connected'}
                   style={{ 
-                    color: '#EF4444', 
+                    color: connectionStatus === 'connected' ? '#EF4444' : '#9CA3AF', 
                     backgroundColor: 'transparent', 
                     border: 'none', 
-                    cursor: 'pointer',
+                    cursor: connectionStatus === 'connected' ? 'pointer' : 'not-allowed',
                     padding: '4px',
                     fontSize: '16px'
                   }}
@@ -894,10 +918,10 @@ const SymptomTracker = () => {
                 fontSize: '14px' 
               }}>
                 <div>
-                  <span style={{ fontWeight: '500' }}>지속시간:</span> {record.duration}분
+                  <span style={{ fontWeight: '500' }}>지속시간:</span> {record.duration ? `${record.duration}분` : '기록 없음'}
                 </div>
                 <div>
-                  <span style={{ fontWeight: '500' }}>두근거림:</span> {record.heart_rate}/10
+                  <span style={{ fontWeight: '500' }}>두근거림:</span> {record.heart_rate ? `${record.heart_rate}/10` : '기록 없음'}
                 </div>
                 <div>
                   <span style={{ fontWeight: '500' }}>혈압:</span> {record.blood_pressure || '기록 없음'}
