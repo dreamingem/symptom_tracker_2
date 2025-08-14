@@ -643,18 +643,6 @@ const SymptomTracker = () => {
             >
               {saving ? '저장 중...' : connectionStatus === 'connected' ? '저장' : '오프라인'}
             </button>
-            <button
-              onClick={() => setDetailMode(true)}
-              style={{ 
-                ...mobileStyles.button,
-                padding: '8px 12px',
-                backgroundColor: '#10B981', 
-                color: 'white',
-                fontSize: isMobile ? '12px' : '14px'
-              }}
-            >
-              상세모드
-            </button>
           </div>
         </div>
 
@@ -841,4 +829,45 @@ const SymptomTracker = () => {
       }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ 
-            fontSize: isMobile ? '36px' : '48px',
+            fontSize: isMobile ? '36px' : '48px', 
+            marginBottom: '16px' 
+          }}>
+            ⟳
+          </div>
+          <p style={{ 
+            fontSize: isMobile ? '16px' : '18px',
+            color: '#6B7280'
+          }}>
+            데이터를 불러오는 중...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ 
+      maxWidth: isMobile ? '100%' : '1024px', 
+      margin: '0 auto', 
+      padding: isMobile ? '16px' : '24px', 
+      backgroundColor: 'white', 
+      minHeight: '100vh' 
+    }}>
+      <ErrorDisplay />
+      
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          marginBottom: '8px',
+          flexWrap: 'wrap',
+          gap: '8px'
+        }}>
+          <h1 style={{ 
+            fontSize: isMobile ? '24px' : '30px', 
+            fontWeight: 'bold', 
+            color: '#111827',
+            margin: 0
+          }}>
+            증상 기록
