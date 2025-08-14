@@ -462,7 +462,7 @@ const SymptomTracker = () => {
                 display: 'block',
                 fontSize: '14px',
                 fontWeight: '500',
-                marginBottom: '6px'
+                marginBottom: '6px',
                 color: '#111827'
               }}>
                 날짜
@@ -479,7 +479,7 @@ const SymptomTracker = () => {
                 display: 'block',
                 fontSize: '14px',
                 fontWeight: '500',
-                marginBottom: '6px'
+                marginBottom: '6px',
                 color: '#111827'
               }}>
                 시간
@@ -498,7 +498,7 @@ const SymptomTracker = () => {
               display: 'block',
               fontSize: '14px',
               fontWeight: '500',
-              marginBottom: '6px'
+              marginBottom: '6px',
               color: '#111827'
             }}>
               당시 하고 있던 일
@@ -528,7 +528,7 @@ const SymptomTracker = () => {
               display: 'block',
               fontSize: '14px',
               fontWeight: '500',
-              marginBottom: '6px'
+              marginBottom: '6px',
               color: '#111827'
             }}>
               두근거림 정도 (1-10)
@@ -556,7 +556,7 @@ const SymptomTracker = () => {
               display: 'block',
               fontSize: '14px',
               fontWeight: '500',
-              marginBottom: '6px'
+              marginBottom: '6px',
               color: '#111827'
             }}>
               지속 시간
@@ -584,7 +584,7 @@ const SymptomTracker = () => {
               display: 'block',
               fontSize: '14px',
               fontWeight: '500',
-              marginBottom: '6px'
+              marginBottom: '6px',
               color: '#111827'
             }}>
               혈압 (선택사항)
@@ -603,7 +603,7 @@ const SymptomTracker = () => {
               display: 'block',
               fontSize: '14px',
               fontWeight: '500',
-              marginBottom: '6px'
+              marginBottom: '6px',
               color: '#111827'
             }}>
               특이사항 (선택사항)
