@@ -395,6 +395,7 @@ const SymptomTracker = () => {
             <option value="식사 중">식사 중</option>
             <option value="휴식 중">휴식 중</option>
             <option value="운동 중">운동 중</option>
+            <option value="노동 중">노동 중</option>
             <option value="기타">기타</option>
           </select>
         </div>
