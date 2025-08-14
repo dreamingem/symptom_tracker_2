@@ -259,7 +259,9 @@ const SymptomTracker = () => {
       borderRadius: '8px',
       fontSize: isMobile ? '16px' : '18px',
       outline: 'none',
-      boxSizing: 'border-box'
+      boxSizing: 'border-box',
+      backgroundColor: 'white',
+      color: '#111827'
     },
     button: {
       padding: isMobile ? '12px 16px' : '16px 24px',
@@ -501,7 +503,11 @@ const SymptomTracker = () => {
             <select
               value={currentRecord.activity}
               onChange={(e) => handleInputChange('activity', e.target.value)}
-              style={styles.input}
+              style={{
+                ...styles.input,
+                backgroundColor: 'white',
+                color: '#111827'
+              }}
             >
               <option value="">선택하세요</option>
               <option value="커피 마시기">커피 마시기</option>
@@ -526,7 +532,11 @@ const SymptomTracker = () => {
             <select
               value={currentRecord.heart_rate || ''}
               onChange={(e) => handleInputChange('heart_rate', e.target.value)}
-              style={styles.input}
+              style={{
+                ...styles.input,
+                backgroundColor: 'white',
+                color: '#111827'
+              }}
             >
               <option value="">선택하세요</option>
               {[1,2,3,4,5,6,7,8,9,10].map(num => (
@@ -549,7 +559,11 @@ const SymptomTracker = () => {
             <select
               value={currentRecord.duration || ''}
               onChange={(e) => handleInputChange('duration', e.target.value)}
-              style={styles.input}
+              style={{
+                ...styles.input,
+                backgroundColor: 'white',
+                color: '#111827'
+              }}
             >
               <option value="">선택하세요</option>
               <option value="5">5분 미만</option>
@@ -594,7 +608,9 @@ const SymptomTracker = () => {
               style={{
                 ...styles.input,
                 height: '80px',
-                resize: 'vertical'
+                resize: 'vertical',
+                backgroundColor: 'white',
+                color: '#111827'
               }}
             />
           </div>
