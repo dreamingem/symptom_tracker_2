@@ -1078,28 +1078,84 @@ const SymptomTracker = () => {
       </div>
 
       {/* 모바일 글로벌 스타일 */}
-      <style jsx global>{`
-        .st { -webkit-tap-highlight-color: transparent; padding-bottom: env(safe-area-inset-bottom); }
-        .btn, .input, select, textarea {
-          font-family: system-ui, -apple-system, Segoe UI, Roboto, Apple SD Gothic Neo, 'Noto Sans KR', sans-serif;
-        }
-        input, select, textarea { font-size: 16px !important; min-height: 44px; }
-        .btn { min-height: 44px; line-height: 1.2; }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .grid-auto { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-        .grid-auto.small { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
-        .footer-cta { position: sticky; bottom: 12px; z-index: 20; margin-top: 24px;
-          background: linear-gradient(180deg, transparent, rgba(255,255,255,0.9) 40%); padding: 8px 0 0; }
-        .btn-ghost { min-height: 44px; }
-        .chip { white-space: nowrap; }
-        @media (max-width: 480px) {
-          .st { padding-left: 12px !important; padding-right: 12px !important; }
-          h1 { font-size: 22px !important; }
-          h2 { font-size: 16px !important; }
-          .grid-2 { grid-template-columns: 1fr; }
-          .row-actions { position: sticky; top: 0; padding: 8px 0; background: white; z-index: 15; }
-        }
-      `}</style>
+     <style jsx global>{`
+  .st { 
+    -webkit-tap-highlight-color: transparent; 
+    padding-bottom: env(safe-area-inset-bottom);
+    color-scheme: light;             /* ✅ iOS 다크 자동변환 방지 */
+    background-color: #ffffff;       /* 배경 고정 */
+  }
+
+  /* 폼 기본값: 항상 라이트 스킨 */
+  .btn, .input, select, textarea {
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Apple SD Gothic Neo, 'Noto Sans KR', sans-serif;
+    color-scheme: light;             /* ✅ 컨트롤 자체에도 라이트 강제 */
+    background-color: #ffffff !important;
+    color: #111827 !important;
+    border: 1px solid #D1D5DB;
+    border-radius: 8px;
+  }
+
+  input, select, textarea { 
+    font-size: 16px !important; 
+    min-height: 44px; 
+    -webkit-text-fill-color: #111827 !important; /* ✅ iOS 텍스트 색 강제 */
+    caret-color: #111827;
+  }
+
+  /* iOS 자동 다크+오토필 배경 제거 */
+  input:-webkit-autofill,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0 30px #ffffff inset !important;
+    -webkit-text-fill-color: #111827 !important;
+    caret-color: #111827 !important;
+  }
+
+  /* 날짜/시간 컨트롤 내부 텍스트 색상 고정 (iOS) */
+  input[type="date"],
+  input[type="time"],
+  select {
+    color-scheme: light;
+    background-color: #ffffff !important;
+    color: #111827 !important;
+  }
+  input[type="date"]::-webkit-date-and-time-value,
+  input[type="time"]::-webkit-date-and-time-value {
+    color: #111827;
+  }
+  /* 캘린더/드롭다운 아이콘이 다크에서 반전되어 안 보이는 문제 방지 */
+  ::-webkit-calendar-picker-indicator {
+    opacity: 0.75;
+    filter: none; /* 필요시 filter: invert(0); */
+  }
+
+  /* 카드/리스트 텍스트도 명시적으로 고정 */
+  .card { 
+    color: #111827; 
+    color-scheme: light; 
+    background-color: #F9FAFB; 
+  }
+  .card h3 { color: #111827; }
+  .card p, .card .grid-auto.small { color: #374151; }
+
+  .btn { min-height: 44px; line-height: 1.2; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid-auto { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .grid-auto.small { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+  .footer-cta { position: sticky; bottom: 12px; z-index: 20; margin-top: 24px;
+    background: linear-gradient(180deg, transparent, rgba(255,255,255,0.9) 40%); padding: 8px 0 0; }
+  .btn-ghost { min-height: 44px; }
+  .chip { white-space: nowrap; }
+
+  @media (max-width: 480px) {
+    .st { padding-left: 12px !important; padding-right: 12px !important; }
+    h1 { font-size: 22px !important; }
+    h2 { font-size: 16px !important; }
+    .grid-2 { grid-template-columns: 1fr; }
+    .row-actions { position: sticky; top: 0; padding: 8px 0; background: white; z-index: 15; }
+  }
+`}</style>
     </div>
   );
 };
