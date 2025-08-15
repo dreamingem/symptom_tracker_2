@@ -243,6 +243,19 @@ const SymptomTracker = () => {
     setCurrentRecord(prev => ({ ...prev, [field]: processedValue }));
   }, []);
 
+  const deleteRecord = useCallback(async (recordId) => {
+    if (!confirm('정말로 이 기록을 삭제하시겠습니까?')) return;
+    try {
+      const { error } = await supabase.from('symptoms').delete().eq('id', recordId);
+      if (error) throw new Error(`삭제 실패: ${error.message}`);
+      const updatedRecords = records.filter(r => r.id !== recordId);
+      setRecords(updatedRecords);
+      localStorage.setItem(`symptomRecords_${userName}`, JSON.stringify(updatedRecords));
+    } catch (e) {
+      setError(e.message);
+    }
+  }, [records, userName]);
+
   // ---------- small components (no hooks inside) ----------
   const ErrorDisplay = () => error && (
     <div className="st-error" style={{
@@ -325,37 +338,61 @@ const SymptomTracker = () => {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <div className="grid-2">
           <div>
-            <label style={{ display: 'block', fontSize: '16px', fontWeight: '500', marginBottom: '6px' }}>날짜</label>
+            <label style={{ display: 'block', fontSize: '16px', fontWeight: '500', marginBottom: '6px', color: '#374151' }}>날짜</label>
             <input
               key="date-input"
               type="date"
               value={currentRecord.date}
               onChange={(e) => handleInputChange('date', e.target.value)}
               className="input"
-              style={{ width: '100%', padding: '12px', border: '1px solid #D1D5DB', borderRadius: '8px', fontSize: '16px' }}
+              style={{ 
+                width: '100%', 
+                padding: '12px', 
+                border: '1px solid #D1D5DB', 
+                borderRadius: '8px', 
+                fontSize: '16px',
+                backgroundColor: 'white',
+                color: '#111827'
+              }}
             />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '16px', fontWeight: '500', marginBottom: '6px' }}>시간</label>
+            <label style={{ display: 'block', fontSize: '16px', fontWeight: '500', marginBottom: '6px', color: '#374151' }}>시간</label>
             <input
               key="time-input"
               type="time"
               value={currentRecord.time}
               onChange={(e) => handleInputChange('time', e.target.value)}
               className="input"
-              style={{ width: '100%', padding: '12px', border: '1px solid #D1D5DB', borderRadius: '8px', fontSize: '16px' }}
+              style={{ 
+                width: '100%', 
+                padding: '12px', 
+                border: '1px solid #D1D5DB', 
+                borderRadius: '8px', 
+                fontSize: '16px',
+                backgroundColor: 'white',
+                color: '#111827'
+              }}
             />
           </div>
         </div>
 
         <div>
-          <label style={{ display: 'block', fontSize: '16px', fontWeight: '500', marginBottom: '6px' }}>당시 하고 있던 일</label>
+          <label style={{ display: 'block', fontSize: '16px', fontWeight: '500', marginBottom: '6px', color: '#374151' }}>당시 하고 있던 일</label>
           <select
             key="activity-select"
             value={currentRecord.activity}
             onChange={(e) => handleInputChange('activity', e.target.value)}
             className="input"
-            style={{ width: '100%', padding: '12px', border: '1px solid #D1D5DB', borderRadius: '8px', fontSize: '16px' }}
+            style={{ 
+              width: '100%', 
+              padding: '12px', 
+              border: '1px solid #D1D5DB', 
+              borderRadius: '8px', 
+              fontSize: '16px',
+              backgroundColor: 'white',
+              color: '#111827'
+            }}
           >
             <option value="">선택하세요</option>
             <option value="커피 마시기">커피 마시기</option>
@@ -369,13 +406,21 @@ const SymptomTracker = () => {
         </div>
 
         <div>
-          <label style={{ display: 'block', fontSize: '16px', fontWeight: '500', marginBottom: '6px' }}>두근거림 정도</label>
+          <label style={{ display: 'block', fontSize: '16px', fontWeight: '500', marginBottom: '6px', color: '#374151' }}>두근거림 정도</label>
           <select
             key="heart-rate-select"
             value={currentRecord.heart_rate || ''}
             onChange={(e) => handleInputChange('heart_rate', e.target.value)}
             className="input"
-            style={{ width: '100%', padding: '12px', border: '1px solid #D1D5DB', borderRadius: '8px', fontSize: '16px' }}
+            style={{ 
+              width: '100%', 
+              padding: '12px', 
+              border: '1px solid #D1D5DB', 
+              borderRadius: '8px', 
+              fontSize: '16px',
+              backgroundColor: 'white',
+              color: '#111827'
+            }}
           >
             <option value="">선택하세요</option>
             {[1,2,3,4,5,6,7,8,9,10].map(num => (
@@ -387,13 +432,21 @@ const SymptomTracker = () => {
         </div>
 
         <div>
-          <label style={{ display: 'block', fontSize: '16px', fontWeight: '500', marginBottom: '6px' }}>지속 시간</label>
+          <label style={{ display: 'block', fontSize: '16px', fontWeight: '500', marginBottom: '6px', color: '#374151' }}>지속 시간</label>
           <select
             key="duration-select"
             value={currentRecord.duration || ''}
             onChange={(e) => handleInputChange('duration', e.target.value)}
             className="input"
-            style={{ width: '100%', padding: '12px', border: '1px solid #D1D5DB', borderRadius: '8px', fontSize: '16px' }}
+            style={{ 
+              width: '100%', 
+              padding: '12px', 
+              border: '1px solid #D1D5DB', 
+              borderRadius: '8px', 
+              fontSize: '16px',
+              backgroundColor: 'white',
+              color: '#111827'
+            }}
           >
             <option value="">선택하세요</option>
             <option value="5">5분 미만</option>
@@ -405,7 +458,7 @@ const SymptomTracker = () => {
         </div>
 
         <div>
-          <label style={{ display: 'block', fontSize: '16px', fontWeight: '500', marginBottom: '6px' }}>혈압 (선택사항)</label>
+          <label style={{ display: 'block', fontSize: '16px', fontWeight: '500', marginBottom: '6px', color: '#374151' }}>혈압 (선택사항)</label>
           <input
             key="blood-pressure-input"
             type="text"
@@ -413,19 +466,37 @@ const SymptomTracker = () => {
             onChange={(e) => handleInputChange('blood_pressure', e.target.value)}
             placeholder="예: 120/80"
             className="input"
-            style={{ width: '100%', padding: '12px', border: '1px solid #D1D5DB', borderRadius: '8px', fontSize: '16px' }}
+            style={{ 
+              width: '100%', 
+              padding: '12px', 
+              border: '1px solid #D1D5DB', 
+              borderRadius: '8px', 
+              fontSize: '16px',
+              backgroundColor: 'white',
+              color: '#111827'
+            }}
           />
         </div>
 
         <div>
-          <label style={{ display: 'block', fontSize: '16px', fontWeight: '500', marginBottom: '6px' }}>특이사항 (선택사항)</label>
+          <label style={{ display: 'block', fontSize: '16px', fontWeight: '500', marginBottom: '6px', color: '#374151' }}>특이사항 (선택사항)</label>
           <textarea
             key="notes-textarea"
             value={currentRecord.notes}
             onChange={(e) => handleInputChange('notes', e.target.value)}
             placeholder="특별히 기억할 만한 내용이 있다면..."
             className="input"
-            style={{ width: '100%', padding: '12px', border: '1px solid #D1D5DB', borderRadius: '8px', fontSize: '16px', height: '96px', resize: 'vertical' }}
+            style={{ 
+              width: '100%', 
+              padding: '12px', 
+              border: '1px solid #D1D5DB', 
+              borderRadius: '8px', 
+              fontSize: '16px', 
+              height: '96px', 
+              resize: 'vertical',
+              backgroundColor: 'white',
+              color: '#111827'
+            }}
           />
         </div>
       </div>
@@ -481,29 +552,43 @@ const SymptomTracker = () => {
           <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px', color: '#1E40AF' }}>① 시각·상황</h2>
           <div className="grid-auto">
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>날짜</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>날짜</label>
               <input
                 key="detail-date-input"
                 type="date"
                 value={currentRecord.date}
                 onChange={(e) => handleInputChange('date', e.target.value)}
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>시간</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>시간</label>
               <input
                 key="detail-time-input"
                 type="time"
                 value={currentRecord.time}
                 onChange={(e) => handleInputChange('time', e.target.value)}
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>당시 하고 있던 일</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>당시 하고 있던 일</label>
               <input
                 key="detail-activity-input"
                 type="text"
@@ -511,11 +596,18 @@ const SymptomTracker = () => {
                 onChange={(e) => handleInputChange('activity', e.target.value)}
                 placeholder="집중 작업, 대화, 운동, 식사, 커피 등"
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>많이 사용한 신체 부위</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>많이 사용한 신체 부위</label>
               <input
                 key="detail-body-part-input"
                 type="text"
@@ -523,11 +615,18 @@ const SymptomTracker = () => {
                 onChange={(e) => handleInputChange('body_part', e.target.value)}
                 placeholder="어깨 근육, 거북목, 구부정한 자세 등"
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>1시간 내 섭취한 음식·음료</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>1시간 내 섭취한 음식·음료</label>
               <input
                 key="detail-intake-input"
                 type="text"
@@ -535,7 +634,14 @@ const SymptomTracker = () => {
                 onChange={(e) => handleInputChange('intake', e.target.value)}
                 placeholder="특히 카페인·알코올"
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               />
             </div>
           </div>
@@ -546,7 +652,7 @@ const SymptomTracker = () => {
           <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px', color: '#92400E' }}>② 증상 시작</h2>
           <div className="grid-auto">
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>증상 시작 순간의 느낌</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>증상 시작 순간의 느낌</label>
               <input
                 key="detail-start-feeling-input"
                 type="text"
@@ -554,17 +660,31 @@ const SymptomTracker = () => {
                 onChange={(e) => handleInputChange('start_feeling', e.target.value)}
                 placeholder="심장이 갑자기 빨라짐, 몸이 붕 뜨는 느낌, 땅으로 꺼지는 느낌"
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>시작 양상</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>시작 양상</label>
               <select
                 key="detail-start-type-select"
                 value={currentRecord.start_type}
                 onChange={(e) => handleInputChange('start_type', e.target.value)}
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               >
                 <option value="">선택하세요</option>
                 <option value="갑작스러움">갑작스러움</option>
@@ -572,7 +692,7 @@ const SymptomTracker = () => {
               </select>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>전조 증상</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>전조 증상</label>
               <input
                 key="detail-premonition-input"
                 type="text"
@@ -580,7 +700,14 @@ const SymptomTracker = () => {
                 onChange={(e) => handleInputChange('premonition', e.target.value)}
                 placeholder="두통, 흉부 압박감, 시야 흐림 등"
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               />
             </div>
           </div>
@@ -591,13 +718,20 @@ const SymptomTracker = () => {
           <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px', color: '#991B1B' }}>③ 증상 진행</h2>
           <div className="grid-auto">
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>두근거림 정도 (1-10)</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>두근거림 정도 (1-10)</label>
               <select
                 key="detail-heart-rate-select"
                 value={currentRecord.heart_rate || ''}
                 onChange={(e) => handleInputChange('heart_rate', e.target.value)}
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               >
                 <option value="">선택하세요</option>
                 {[1,2,3,4,5,6,7,8,9,10].map(num => (
@@ -606,7 +740,7 @@ const SymptomTracker = () => {
               </select>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>식은땀 위치 및 양</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>식은땀 위치 및 양</label>
               <input
                 key="detail-sweating-input"
                 type="text"
@@ -614,17 +748,31 @@ const SymptomTracker = () => {
                 onChange={(e) => handleInputChange('sweating', e.target.value)}
                 placeholder="이마, 등, 손바닥 등"
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>호흡 곤란 정도 (1-10)</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>호흡 곤란 정도 (1-10)</label>
               <select
                 key="detail-breathing-select"
                 value={currentRecord.breathing || ''}
                 onChange={(e) => handleInputChange('breathing', e.target.value)}
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               >
                 <option value="">선택하세요</option>
                 {[1,2,3,4,5,6,7,8,9,10].map(num => (
@@ -633,13 +781,20 @@ const SymptomTracker = () => {
               </select>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>어지럼/중심잡기 어려움 (1-10)</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>어지럼/중심잡기 어려움 (1-10)</label>
               <select
                 key="detail-dizziness-select"
                 value={currentRecord.dizziness || ''}
                 onChange={(e) => handleInputChange('dizziness', e.target.value)}
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               >
                 <option value="">선택하세요</option>
                 {[1,2,3,4,5,6,7,8,9,10].map(num => (
@@ -648,13 +803,20 @@ const SymptomTracker = () => {
               </select>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>근육 힘 빠짐 정도</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>근육 힘 빠짐 정도</label>
               <select
                 key="detail-weakness-select"
                 value={currentRecord.weakness}
                 onChange={(e) => handleInputChange('weakness', e.target.value)}
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               >
                 <option value="">선택하세요</option>
                 <option value="서있기 가능">서있기 가능</option>
@@ -663,13 +825,20 @@ const SymptomTracker = () => {
               </select>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>말하기 힘든 정도 (1-10)</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>말하기 힘든 정도 (1-10)</label>
               <select
                 key="detail-speech-difficulty-select"
                 value={currentRecord.speech_difficulty || ''}
                 onChange={(e) => handleInputChange('speech_difficulty', e.target.value)}
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               >
                 <option value="">선택하세요</option>
                 {[1,2,3,4,5,6,7,8,9,10].map(num => (
@@ -678,7 +847,7 @@ const SymptomTracker = () => {
               </select>
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>흉통/흉부 불편감</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>흉통/흉부 불편감</label>
               <input
                 key="detail-chest-pain-input"
                 type="text"
@@ -686,7 +855,14 @@ const SymptomTracker = () => {
                 onChange={(e) => handleInputChange('chest_pain', e.target.value)}
                 placeholder="위치, 정도, 특징 등"
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               />
             </div>
           </div>
@@ -697,7 +873,7 @@ const SymptomTracker = () => {
           <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px', color: '#065F46' }}>④ 객관적 수치</h2>
           <div className="grid-auto">
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>심박수 (bpm)</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>심박수 (bpm)</label>
               <input
                 key="detail-measured-heart-rate-input"
                 type="number"
@@ -706,24 +882,38 @@ const SymptomTracker = () => {
                 value={currentRecord.measured_heart_rate || ''}
                 onChange={(e) => handleInputChange('measured_heart_rate', e.target.value)}
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>심전도 기록</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>심전도 기록</label>
               <select
                 key="detail-ecg-taken-select"
                 value={currentRecord.ecg_taken}
                 onChange={(e) => handleInputChange('ecg_taken', e.target.value === 'true')}
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               >
                 <option value="false">아니오</option>
                 <option value="true">예</option>
               </select>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>혈압</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>혈압</label>
               <input
                 key="detail-blood-pressure-input"
                 type="text"
@@ -731,11 +921,18 @@ const SymptomTracker = () => {
                 onChange={(e) => handleInputChange('blood_pressure', e.target.value)}
                 placeholder="예: 120/80"
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>혈당</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>혈당</label>
               <input
                 key="detail-blood-sugar-input"
                 type="text"
@@ -743,7 +940,14 @@ const SymptomTracker = () => {
                 onChange={(e) => handleInputChange('blood_sugar', e.target.value)}
                 placeholder="예: 90 mg/dL"
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               />
             </div>
           </div>
@@ -754,7 +958,7 @@ const SymptomTracker = () => {
           <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px', color: '#6B21A8' }}>⑤ 지속 시간 및 종료 후 상태</h2>
           <div className="grid-auto">
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>증상 지속 시간 (분)</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>증상 지속 시간 (분)</label>
               <input
                 key="detail-duration-input"
                 type="number"
@@ -763,11 +967,18 @@ const SymptomTracker = () => {
                 value={currentRecord.duration || ''}
                 onChange={(e) => handleInputChange('duration', e.target.value)}
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>종료 후 남은 불편감</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>종료 후 남은 불편감</label>
               <input
                 key="detail-after-effects-input"
                 type="text"
@@ -775,11 +986,18 @@ const SymptomTracker = () => {
                 onChange={(e) => handleInputChange('after_effects', e.target.value)}
                 placeholder="피로, 무기력, 두통 등"
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>회복 후 심박수</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>회복 후 심박수</label>
               <input
                 key="detail-recovery-heart-rate-input"
                 type="number"
@@ -788,11 +1006,18 @@ const SymptomTracker = () => {
                 value={currentRecord.recovery_heart_rate || ''}
                 onChange={(e) => handleInputChange('recovery_heart_rate', e.target.value)}
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>회복 후 혈압</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>회복 후 혈압</label>
               <input
                 key="detail-recovery-blood-pressure-input"
                 type="text"
@@ -800,11 +1025,18 @@ const SymptomTracker = () => {
                 onChange={(e) => handleInputChange('recovery_blood_pressure', e.target.value)}
                 placeholder="예: 120/80"
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>회복을 위해 시도한 행동</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>회복을 위해 시도한 행동</label>
               <input
                 key="detail-recovery-actions-input"
                 type="text"
@@ -812,17 +1044,31 @@ const SymptomTracker = () => {
                 onChange={(e) => handleInputChange('recovery_actions', e.target.value)}
                 placeholder="간식이나 음료 섭취, 자리에 눕기, 눈 감기 등"
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>해당 행동이 회복에 도움되었나요?</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>해당 행동이 회복에 도움되었나요?</label>
               <select
                 key="detail-recovery-helpful-select"
                 value={currentRecord.recovery_helpful}
                 onChange={(e) => handleInputChange('recovery_helpful', e.target.value)}
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               >
                 <option value="">선택하세요</option>
                 <option value="매우 도움됨">매우 도움됨</option>
@@ -839,7 +1085,7 @@ const SymptomTracker = () => {
           <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px', color: '#374151' }}>⑥ 기타 참고</h2>
           <div className="grid-auto">
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>최근 며칠간 수면 시간</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>최근 며칠간 수면 시간</label>
               <input
                 key="detail-sleep-hours-input"
                 type="text"
@@ -847,11 +1093,18 @@ const SymptomTracker = () => {
                 onChange={(e) => handleInputChange('sleep_hours', e.target.value)}
                 placeholder="예: 5-6시간"
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>스트레스 상황 여부</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>스트레스 상황 여부</label>
               <input
                 key="detail-stress-input"
                 type="text"
@@ -859,11 +1112,18 @@ const SymptomTracker = () => {
                 onChange={(e) => handleInputChange('stress', e.target.value)}
                 placeholder="업무, 인간관계, 건강 등"
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>최근 복용 약물</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>최근 복용 약물</label>
               <input
                 key="detail-medications-input"
                 type="text"
@@ -871,18 +1131,34 @@ const SymptomTracker = () => {
                 onChange={(e) => handleInputChange('medications', e.target.value)}
                 placeholder="약물명, 용량, 복용 시간"
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>추가 메모</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px', color: '#374151' }}>추가 메모</label>
               <textarea
                 key="detail-notes-textarea"
                 value={currentRecord.notes}
                 onChange={(e) => handleInputChange('notes', e.target.value)}
                 placeholder="기타 특이사항이나 중요하다고 생각되는 내용"
                 className="input"
-                style={{ width: '100%', padding: '10px', border: '1px solid #D1D5DB', borderRadius: '8px', height: '90px', resize: 'vertical' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  border: '1px solid #D1D5DB', 
+                  borderRadius: '8px', 
+                  height: '90px', 
+                  resize: 'vertical',
+                  backgroundColor: 'white',
+                  color: '#111827'
+                }}
               />
             </div>
           </div>
@@ -927,7 +1203,16 @@ const SymptomTracker = () => {
             onChange={(e) => setTempUserName(e.target.value)}
             placeholder="예: 김철수 등"
             className="input"
-            style={{ width: '100%', padding: '16px', border: '2px solid #D1D5DB', borderRadius: '8px', fontSize: '18px', outline: 'none' }}
+            style={{ 
+              width: '100%', 
+              padding: '16px', 
+              border: '2px solid #D1D5DB', 
+              borderRadius: '8px', 
+              fontSize: '18px', 
+              outline: 'none',
+              backgroundColor: 'white',
+              color: '#111827'
+            }}
             onKeyDown={(e) => e.key === 'Enter' && handleUserSetup()}
           />
         </div>
@@ -1083,7 +1368,12 @@ const SymptomTracker = () => {
         .btn, .input, select, textarea {
           font-family: system-ui, -apple-system, Segoe UI, Roboto, Apple SD Gothic Neo, 'Noto Sans KR', sans-serif;
         }
-        input, select, textarea { font-size: 16px !important; min-height: 44px; }
+        input, select, textarea { 
+          font-size: 16px !important; 
+          min-height: 44px; 
+          backgroundColor: white !important;
+          color: #111827 !important;
+        }
         .btn { min-height: 44px; line-height: 1.2; }
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         .grid-auto { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
