@@ -484,7 +484,7 @@ const SymptomTracker = () => {
             key="notes-textarea"
             value={currentRecord.notes}
             onChange={(e) => handleInputChange('notes', e.target.value)}
-            placeholder="특별히 기억할 만한 내용이 있다면...(예: 영향을 미쳤을 것으로 생각되는 음식이나 행동, 복용 중인 약물이나 행동, 증상 발현 전 전반적인 하루 컨디션, 완화에 도움이 된 것으로 생각되는 행동 등)"
+            placeholder="특별히 기억할 만한 내용이 있다면...(예: 영향을 미쳤을 것으로 생각되는 음식이나 행동, 복용 중인 약물, 증상 발현 전 전반적인 하루 컨디션, 완화에 도움이 된 것으로 생각되는 행동 등)"
             className="input"
             style={{ 
               width: '100%', 
