@@ -925,7 +925,7 @@ const SymptomTracker = () => {
             type="text"
             value={tempUserName}
             onChange={(e) => setTempUserName(e.target.value)}
-            placeholder="예: 김아버지, 김철수 등"
+            placeholder="예: 김철수 등"
             className="input"
             style={{ width: '100%', padding: '16px', border: '2px solid #D1D5DB', borderRadius: '8px', fontSize: '18px', outline: 'none' }}
             onKeyDown={(e) => e.key === 'Enter' && handleUserSetup()}
@@ -1045,10 +1045,10 @@ const SymptomTracker = () => {
           </div>
         ) : (
           records.map((record) => (
-            <div key={record.id} className="card" style={{ border: '1px solid #E5E7EB', borderRadius: '10px', padding: '12px', backgroundColor: '#F9FAFB' }}>
+            <div key={record.id} className="card" style={{ border: '1px solid #E5E7EB', borderRadius: '10px', padding: '12px', backgroundColor: '#F9FAFB', color: '#111827', colorScheme: 'light' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
                 <div>
-                  <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px', color: '#111827' }}>
                     {record.date} {record.time}
                   </h3>
                   <p style={{ color: '#6B7280', margin: 0 }}>{record.activity}</p>
@@ -1068,7 +1068,7 @@ const SymptomTracker = () => {
                 <div><span style={{ fontWeight: '500' }}>혈압:</span> {record.blood_pressure || '기록 없음'}</div>
               </div>
               {record.notes && (
-                <div style={{ marginTop: '8px', fontSize: '14px', backgroundColor: 'white', padding: '8px', borderRadius: '8px' }}>
+                <div style={{ marginTop: '8px', fontSize: '14px', backgroundColor: 'white', padding: '8px', borderRadius: '8px', color: '#111827' }}>
                   <span style={{ fontWeight: '500' }}>메모:</span> {record.notes}
                 </div>
               )}
